@@ -19,6 +19,7 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Modules\Localization\Filament\LocalizationPanelPlugin;
+use Modules\Pricing\Filament\PricingPanelPlugin;
 use Modules\Products\Filament\ProductsPanelPlugin;
 use Modules\Taxonomies\Filament\TaxonomiesPanelPlugin;
 
@@ -47,6 +48,7 @@ class AdminPanelProvider extends PanelProvider
                 LocalizationPanelPlugin::make(),
                 ProductsPanelPlugin::make(),
                 TaxonomiesPanelPlugin::make(),
+                PricingPanelPlugin::make(),
             ])
             ->middleware([
                 EncryptCookies::class,

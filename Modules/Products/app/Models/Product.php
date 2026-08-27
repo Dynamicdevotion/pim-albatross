@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Localization\Models\ProductTranslation;
 use Modules\Localization\Support\Locales;
+use Modules\Pricing\Models\ProductPrice;
 use Modules\Products\Database\Factories\ProductFactory;
 use Modules\Taxonomies\Models\TaxonomyTerm;
 
@@ -38,6 +39,14 @@ class Product extends Model
     public function taxonomyTerms(): BelongsToMany
     {
         return $this->belongsToMany(TaxonomyTerm::class, 'product_taxonomy_term');
+    }
+
+    /**
+     * This product's price in each price list.
+     */
+    public function prices(): HasMany
+    {
+        return $this->hasMany(ProductPrice::class);
     }
 
     /**

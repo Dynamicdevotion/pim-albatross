@@ -1,5 +1,6 @@
 {
     "Products": true,
     "Localization": true,
-    "Taxonomies": true
+    "Taxonomies": true,
+    "Pricing": true
 }
