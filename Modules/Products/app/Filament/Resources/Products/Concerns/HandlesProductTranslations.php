@@ -2,28 +2,28 @@
 
 namespace Modules\Products\Filament\Resources\Products\Concerns;
 
-use Modules\Localization\Enums\Locale;
+use Modules\Localization\Models\Language;
+use Modules\Localization\Support\Locales;
 
 /**
  * Shared translation load/save logic for the Create and Edit product pages.
  *
- * The form keeps per-locale content under the non-column `translations` key
- * (`translations.<locale>.name` / `.description`); these helpers move that data
- * in and out of the product_translations table around the record save.
+ * The form keeps per-language content under the non-column `translations` key
+ * (`translations.<code>.name` / `.description`); these helpers move that data in
+ * and out of the product_translations table (keyed by `language_id`) around the
+ * record save. Only currently-active languages are touched — rows for
+ * deactivated languages are left untouched ("kept hidden").
  */
 trait HandlesProductTranslations
 {
     /**
-     * Translation form data pulled out of the record payload, keyed by locale.
+     * Translation form data pulled out of the record payload, keyed by code.
      *
      * @var array<string, array{name?: string|null, description?: string|null}>
      */
     protected array $translationData = [];
 
     /**
-     * Remove the non-column `translations` key from the data written to the
-     * products table, keeping it for saveTranslations().
-     *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
@@ -36,15 +36,19 @@ trait HandlesProductTranslations
     }
 
     /**
-     * Load existing translations into the `translations.<locale>.*` form state.
-     *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     protected function fillTranslations(array $data): array
     {
         foreach ($this->record->translations as $translation) {
-            $data['translations'][$translation->locale] = [
+            $code = Locales::codeFor((int) $translation->language_id);
+
+            if ($code === null) {
+                continue;
+            }
+
+            $data['translations'][$code] = [
                 'name' => $translation->name,
                 'description' => $translation->description,
             ];
@@ -54,31 +58,31 @@ trait HandlesProductTranslations
     }
 
     /**
-     * Upsert one product_translations row per locale that has a name; delete
-     * the row for any locale left without a name (name is NOT NULL).
+     * Upsert one product_translations row per active language that has a name;
+     * delete the row for any active language left without a name.
      */
     protected function saveTranslations(): void
     {
-        foreach (Locale::cases() as $locale) {
-            $row = $this->translationData[$locale->value] ?? [];
+        Locales::active()->each(function (Language $language): void {
+            $row = $this->translationData[$language->code] ?? [];
             $name = trim((string) ($row['name'] ?? ''));
 
             if ($name === '') {
                 $this->record->translations()
-                    ->where('locale', $locale->value)
+                    ->where('language_id', $language->id)
                     ->delete();
 
-                continue;
+                return;
             }
 
             $this->record->translations()->updateOrCreate(
-                ['locale' => $locale->value],
+                ['language_id' => $language->id],
                 [
                     'name' => $name,
                     'description' => $this->normalizeRichText($row['description'] ?? null),
                 ],
             );
-        }
+        });
     }
 
     /**

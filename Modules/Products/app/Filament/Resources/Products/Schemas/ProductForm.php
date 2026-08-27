@@ -8,7 +8,8 @@ use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
-use Modules\Localization\Enums\Locale;
+use Modules\Localization\Models\Language;
+use Modules\Localization\Support\Locales;
 use Modules\Taxonomies\Models\TaxonomyTerm;
 
 class ProductForm
@@ -50,19 +51,18 @@ class ProductForm
                     ->columnSpanFull(),
                 Tabs::make('translations')
                     ->columnSpanFull()
-                    ->tabs(array_map(
-                        fn (Locale $locale): Tabs\Tab => Tabs\Tab::make(
-                            $locale->label().($locale->isDefault() ? ' — base' : ''),
+                    ->tabs(fn (): array => Locales::active()
+                        ->map(fn (Language $language): Tabs\Tab => Tabs\Tab::make(
+                            $language->name.($language->is_base ? ' — base' : ''),
                         )->schema([
-                            TextInput::make("translations.{$locale->value}.name")
+                            TextInput::make("translations.{$language->code}.name")
                                 ->label('Name')
                                 ->maxLength(255)
-                                ->required($locale->isDefault()),
-                            RichEditor::make("translations.{$locale->value}.description")
+                                ->required($language->is_base),
+                            RichEditor::make("translations.{$language->code}.description")
                                 ->label('Description'),
-                        ]),
-                        Locale::cases(),
-                    )),
+                        ]))
+                        ->all()),
             ]);
     }
 }

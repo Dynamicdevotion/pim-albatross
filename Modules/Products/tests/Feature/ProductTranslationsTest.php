@@ -6,8 +6,8 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Modules\Localization\Database\Seeders\LanguageSeeder;
 use Modules\Localization\Database\Seeders\ProductTranslationSeeder;
-use Modules\Localization\Enums\Locale;
 use Modules\Localization\Models\ProductTranslation;
 use Modules\Products\Filament\Resources\Products\Pages\CreateProduct;
 use Modules\Products\Filament\Resources\Products\Pages\EditProduct;
@@ -23,6 +23,7 @@ class ProductTranslationsTest extends TestCase
     {
         parent::setUp();
 
+        $this->seed(LanguageSeeder::class);
         $this->actingAs(User::factory()->create());
         Filament::setCurrentPanel(Filament::getPanel('admin'));
     }
@@ -33,9 +34,8 @@ class ProductTranslationsTest extends TestCase
         $product->translations()->create(['locale' => 'it', 'name' => 'Sedia']);
 
         $this->assertSame('Sedia', $product->translate('it')->name);
-        $this->assertSame('Sedia', $product->translate(Locale::Italian)->name);
         $this->assertNull($product->translate('en'));
-        $this->assertNull($product->translate(Locale::German));
+        $this->assertNull($product->translate('de'));
     }
 
     public function test_deleting_a_product_cascades_to_translations(): void
@@ -107,13 +107,14 @@ class ProductTranslationsTest extends TestCase
     public function test_factory_builds_a_valid_translation_for_a_given_locale(): void
     {
         $translation = ProductTranslation::factory()
-            ->forLocale(Locale::English)
+            ->forLocale('en')
             ->create();
 
         $this->assertDatabaseHas('product_translations', [
             'id' => $translation->id,
-            'locale' => 'en',
+            'language_id' => $translation->language_id,
         ]);
+        $this->assertSame('en', $translation->locale);
         $this->assertInstanceOf(Product::class, $translation->product);
         $this->assertNotEmpty($translation->name);
 
@@ -149,5 +150,15 @@ class ProductTranslationsTest extends TestCase
             ->filterTable('missing_translation', 'en')
             ->assertCanSeeTableRecords([$itOnly])
             ->assertCanNotSeeTableRecords([$itEn]);
+    }
+
+    public function test_product_form_only_shows_active_language_tabs(): void
+    {
+        \Modules\Localization\Models\Language::query()->where('code', 'pt')->update(['active' => true]);
+
+        $html = Livewire::test(CreateProduct::class)->html();
+
+        $this->assertStringContainsString('Português', $html);
+        $this->assertStringNotContainsString('Nederlands', $html); // still inactive
     }
 }

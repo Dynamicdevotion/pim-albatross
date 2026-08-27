@@ -6,8 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Modules\Localization\Enums\Locale;
 use Modules\Localization\Models\ProductTranslation;
+use Modules\Localization\Support\Locales;
 use Modules\Products\Database\Factories\ProductFactory;
 use Modules\Taxonomies\Models\TaxonomyTerm;
 
@@ -25,7 +25,7 @@ class Product extends Model
     ];
 
     /**
-     * All per-locale translations of this product's content.
+     * All per-language translations of this product's content.
      */
     public function translations(): HasMany
     {
@@ -41,17 +41,21 @@ class Product extends Model
     }
 
     /**
-     * The translation for a given locale, or null if it does not exist.
+     * The translation for a given language code, or null if it does not exist.
      *
      * No fallback: a missing translation returns null.
      */
-    public function translate(Locale|string $locale): ?ProductTranslation
+    public function translate(string $locale): ?ProductTranslation
     {
-        $value = $locale instanceof Locale ? $locale->value : $locale;
+        $languageId = Locales::idFor($locale);
+
+        if ($languageId === null) {
+            return null;
+        }
 
         return $this->relationLoaded('translations')
-            ? $this->translations->firstWhere('locale', $value)
-            : $this->translations()->where('locale', $value)->first();
+            ? $this->translations->firstWhere('language_id', $languageId)
+            : $this->translations()->where('language_id', $languageId)->first();
     }
 
     protected static function newFactory(): ProductFactory

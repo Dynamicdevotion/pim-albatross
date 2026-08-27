@@ -9,7 +9,8 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Modules\Localization\Enums\Locale;
+use Modules\Localization\Models\Language;
+use Modules\Localization\Support\Locales;
 use Modules\Products\Models\Product;
 
 class ProductsTable
@@ -24,29 +25,30 @@ class ProductsTable
             ->columns([
                 TextColumn::make('name_base')
                     ->label('Name')
-                    ->getStateUsing(fn (Product $record): ?string => $record->translate(Locale::default())?->name)
+                    ->getStateUsing(fn (Product $record): ?string => $record->translate(Locales::baseCode())?->name)
                     ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas(
                         'translations',
-                        fn ($q) => $q->where('locale', Locale::default()->value)
+                        fn (Builder $q) => $q->where('language_id', Locales::idFor(Locales::baseCode()))
                             ->where('name', 'like', "%{$search}%"),
                     )),
                 TextColumn::make('translated_locales')
                     ->label('Translations')
                     ->badge()
                     ->getStateUsing(function (Product $record): array {
-                        $order = Locale::values();
+                        $order = Locales::activeCodes();
 
                         return $record->translations
-                            ->pluck('locale')
+                            ->map(fn ($translation): ?string => Locales::codeFor((int) $translation->language_id))
+                            ->filter()
                             ->unique()
-                            ->sortBy(fn (string $locale): int => (int) array_search($locale, $order, true))
-                            ->map(fn (string $locale): string => strtoupper($locale))
+                            ->sortBy(fn (string $code): int => (int) array_search($code, $order, true))
+                            ->map(fn (string $code): string => strtoupper($code))
                             ->values()
                             ->all();
                     })
-                    ->color(fn (string $state): string => $state === strtoupper(Locale::default()->value) ? 'primary' : 'gray')
+                    ->color(fn (string $state): string => $state === strtoupper(Locales::baseCode()) ? 'primary' : 'gray')
                     ->placeholder('—')
-                    ->tooltip('Locales this product has content for'),
+                    ->tooltip('Languages this product has content for'),
                 TextColumn::make('taxonomy_terms')
                     ->label('Terms')
                     ->badge()
@@ -91,15 +93,13 @@ class ProductsTable
                     ]),
                 SelectFilter::make('missing_translation')
                     ->label('Missing translation')
-                    ->options(
-                        collect(Locale::cases())
-                            ->mapWithKeys(fn (Locale $locale): array => [$locale->value => $locale->label()])
-                            ->all(),
-                    )
+                    ->options(fn (): array => Locales::active()
+                        ->mapWithKeys(fn (Language $language): array => [$language->code => $language->name])
+                        ->all())
                     ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
                         ? $query->whereDoesntHave(
                             'translations',
-                            fn (Builder $relation): Builder => $relation->where('locale', $data['value']),
+                            fn (Builder $relation): Builder => $relation->where('language_id', Locales::idFor($data['value'])),
                         )
                         : $query),
             ])

@@ -4,8 +4,8 @@ namespace Modules\Localization\Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
-use Modules\Localization\Enums\Locale;
 use Modules\Localization\Models\ProductTranslation;
+use Modules\Localization\Support\Locales;
 use Modules\Products\Models\Product;
 
 /**
@@ -19,20 +19,18 @@ class ProductTranslationFactory extends Factory
     {
         return [
             'product_id' => Product::factory(),
-            'locale' => Locale::default()->value,
+            'language_id' => Locales::idFor(Locales::baseCode()),
             'name' => Str::title(fake()->words(3, true)),
             'description' => '<p>'.fake()->paragraph().'</p>',
         ];
     }
 
     /**
-     * Set the locale of the translation.
+     * Set the language of the translation by its code.
      */
-    public function forLocale(Locale|string $locale): static
+    public function forLocale(string $code): static
     {
-        return $this->state(fn (): array => [
-            'locale' => $locale instanceof Locale ? $locale->value : $locale,
-        ]);
+        return $this->state(fn (): array => ['language_id' => Locales::idFor($code)]);
     }
 
     /**
