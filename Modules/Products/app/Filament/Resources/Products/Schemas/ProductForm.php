@@ -2,9 +2,6 @@
 
 namespace Modules\Products\Filament\Resources\Products\Schemas;
 
-use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\Repeater;
-use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -14,7 +11,6 @@ use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Localization\Models\Language;
 use Modules\Localization\Support\Locales;
-use Modules\Pricing\Support\ProductPriceMatrix;
 use Modules\Products\Enums\ProductType;
 use Modules\Products\Models\Product;
 use Modules\Taxonomies\Models\TaxonomyTerm;
@@ -81,7 +77,9 @@ class ProductForm
                     ->getOptionLabelFromRecordUsing(fn (TaxonomyTerm $record): string =>
                         "{$record->taxonomy->name}: {$record->name}")
                     ->columnSpanFull(),
-                self::pricesTable(),
+                ProductPricesTable::make()
+                    ->visible(fn (Get $get): bool => $get('type') !== ProductType::Variable->value)
+                    ->columnSpanFull(),
                 Tabs::make('translations')
                     ->columnSpanFull()
                     ->tabs(fn (): array => Locales::active()
@@ -97,39 +95,5 @@ class ProductForm
                         ]))
                         ->all()),
             ]);
-    }
-
-    /**
-     * A fixed row per active price list; only the price is editable. A blank
-     * price means "no price on that list" — see ProductPriceMatrix.
-     */
-    public static function pricesTable(): Repeater
-    {
-        return Repeater::make('prices')
-            ->label(__('pim.field.prices'))
-            ->visible(fn (Get $get): bool => $get('type') !== ProductType::Variable->value)
-            ->addable(false)
-            ->deletable(false)
-            ->reorderable(false)
-            ->table([
-                TableColumn::make(__('pim.field.price_list')),
-                TableColumn::make(__('pim.field.price')),
-            ])
-            ->schema([
-                Hidden::make('price_list_id'),
-                TextInput::make('price_list_label')
-                    ->hiddenLabel()
-                    ->disabled()
-                    ->dehydrated(false),
-                TextInput::make('price')
-                    ->hiddenLabel()
-                    ->numeric()
-                    ->minValue(0)
-                    ->maxValue(99999999.99)
-                    ->extraInputAttributes(['step' => '0.01'])
-                    ->placeholder('—'),
-            ])
-            ->default(fn (): array => ProductPriceMatrix::readItems())
-            ->columnSpanFull();
     }
 }

@@ -30,7 +30,9 @@ use Modules\Localization\Models\Language;
 use Modules\Localization\Support\Locales;
 use Modules\Pricing\Models\PriceList;
 use Modules\Products\Enums\ProductType;
+use Modules\Products\Filament\Resources\Products\Concerns\HandlesVariantPrices;
 use Modules\Products\Filament\Resources\Products\Concerns\HandlesVariantTranslations;
+use Modules\Products\Filament\Resources\Products\Schemas\ProductPricesTable;
 use Modules\Products\Models\Product;
 use Modules\Products\Support\VariantGenerator;
 use Modules\Taxonomies\Models\Taxonomy;
@@ -44,6 +46,7 @@ use Modules\Taxonomies\Models\TaxonomyTerm;
  */
 class VariantsRelationManager extends RelationManager
 {
+    use HandlesVariantPrices;
     use HandlesVariantTranslations;
 
     protected static string $relationship = 'variants';
@@ -95,34 +98,7 @@ class VariantsRelationManager extends RelationManager
                 ->searchable()
                 ->getOptionLabelFromRecordUsing(fn (TaxonomyTerm $record): string => "{$record->taxonomy->name}: {$record->name}")
                 ->columnSpanFull(),
-            Repeater::make('prices')
-                ->label(__('pim.field.prices'))
-                ->relationship()
-                ->columns(2)
-                ->schema([
-                    Select::make('price_list_id')
-                        ->label(__('pim.field.price_list'))
-                        ->native(false)
-                        ->options(fn (): array => PriceList::query()
-                            ->orderByDesc('is_default')
-                            ->orderBy('name')
-                            ->pluck('name', 'id')
-                            ->all())
-                        ->default(fn (): ?int => PriceList::query()->where('is_default', true)->value('id')
-                            ?? PriceList::query()->value('id'))
-                        ->required()
-                        ->distinct()
-                        ->selectablePlaceholder(false),
-                    TextInput::make('price')
-                        ->label(__('pim.field.price'))
-                        ->numeric()
-                        ->minValue(0)
-                        ->required()
-                        ->extraInputAttributes(['step' => '0.01']),
-                ])
-                ->addActionLabel(__('pim.action.add_price'))
-                ->reorderable(false)
-                ->defaultItems(0)
+            ProductPricesTable::make()
                 ->columnSpanFull(),
         ]);
     }
@@ -174,18 +150,25 @@ class VariantsRelationManager extends RelationManager
                     ->mutateDataUsing(function (array $data): array {
                         $data['type'] = ProductType::Variant->value;
 
-                        return $this->pullVariantTranslations($data);
+                        return $this->pullVariantPrices($this->pullVariantTranslations($data));
                     })
-                    ->after(fn (Product $record) => $this->saveVariantTranslations($record)),
+                    ->after(function (Product $record): void {
+                        $this->saveVariantTranslations($record);
+                        $this->saveVariantPrices($record);
+                    }),
             ])
             ->recordActions([
                 EditAction::make()
                     ->mutateRecordDataUsing(fn (array $data, Product $record): array => [
                         ...$data,
                         'translations' => $this->readVariantTranslations($record),
+                        'prices' => $this->readVariantPrices($record),
                     ])
-                    ->mutateDataUsing(fn (array $data): array => $this->pullVariantTranslations($data))
-                    ->after(fn (Product $record) => $this->saveVariantTranslations($record)),
+                    ->mutateDataUsing(fn (array $data): array => $this->pullVariantPrices($this->pullVariantTranslations($data)))
+                    ->after(function (Product $record): void {
+                        $this->saveVariantTranslations($record);
+                        $this->saveVariantPrices($record);
+                    }),
                 DeleteAction::make(),
             ])
             ->toolbarActions([

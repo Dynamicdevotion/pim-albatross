@@ -8,6 +8,7 @@ use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Modules\Localization\Database\Seeders\LanguageSeeder;
+use Modules\Pricing\Models\PriceList;
 use Modules\Products\Enums\ProductType;
 use Modules\Products\Filament\Resources\Products\Pages\EditProduct;
 use Modules\Products\Filament\Resources\Products\RelationManagers\VariantsRelationManager;
@@ -94,6 +95,33 @@ class VariantsRelationManagerTest extends TestCase
         $this->assertSame(4, $variant->stock);
         $this->assertSame('Maglietta Rossa', $variant->translate('it')->name);
         $this->assertSame('Red T-shirt', $variant->translate('en')->name);
+    }
+
+    public function test_variant_edit_sets_and_clears_per_list_prices(): void
+    {
+        $standard = PriceList::create(['name' => 'Standard', 'is_default' => true]);
+        $wholesale = PriceList::create(['name' => 'Wholesale']);
+
+        $parent = $this->variableWithName();
+        $variant = Product::factory()->variantOf($parent)->create(['sku' => 'TSHIRT-V1']);
+        $variant->translations()->create(['locale' => 'it', 'name' => 'V1']);
+        $variant->prices()->create(['price_list_id' => $standard->id, 'price' => 30]);
+
+        $this->manager($parent)
+            ->callAction(TestAction::make('edit')->table($variant), data: [
+                'sku' => 'TSHIRT-V1',
+                'stock' => 0,
+                'translations' => ['it' => ['name' => 'V1']],
+                'prices' => [
+                    ['price_list_id' => $standard->id, 'price' => ''],   // clear an existing price
+                    ['price_list_id' => $wholesale->id, 'price' => '12'], // add a new one
+                ],
+            ])
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseMissing('product_prices', ['product_id' => $variant->id, 'price_list_id' => $standard->id]);
+        $this->assertDatabaseHas('product_prices', ['product_id' => $variant->id, 'price_list_id' => $wholesale->id, 'price' => 12.00]);
+        $this->assertSame(1, $variant->prices()->count());
     }
 
     public function test_generate_variants_action_builds_one_variant_per_combination(): void

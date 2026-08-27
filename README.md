@@ -159,11 +159,13 @@ app/
 │       │   ├── ListProducts.php
 │       │   ├── CreateProduct.php
 │       │   └── EditProduct.php
-│       ├── Concerns/
-│       │   ├── HandlesProductTranslations.php    # per-locale load/save (pages)
-│       │   └── HandlesVariantTranslations.php    # same, for the variant RM actions
+│       ├── Concerns/                        # page/RM hooks: translations + prices load/save
+│       │   ├── HandlesProductTranslations.php    HandlesProductPrices.php   # product pages
+│       │   └── HandlesVariantTranslations.php    HandlesVariantPrices.php   # variant RM actions
 │       ├── RelationManagers/VariantsRelationManager.php  # variants + "Generate variants"
-│       ├── Schemas/ProductForm.php          # create/edit form schema (+ translation tabs)
+│       ├── Schemas/
+│       │   ├── ProductForm.php              # create/edit form schema (+ translation tabs)
+│       │   └── ProductPricesTable.php       # fixed per-active-list price table (shared)
 │       └── Tables/ProductsTable.php         # list table: columns, filters, actions
 ├── Enums/ProductType.php                    # simple / variable / variant
 ├── Exceptions/CannotChangeProductType.php
@@ -400,9 +402,12 @@ $product->prices;         // HasMany<ProductPrice>
     taxonomy category* — the ± actions only touch rows that already have a
     price **in the selected list** (missing ones skipped, other lists never).
   - loads all filtered rows up to a 1000 cap (banner past it).
-- The **Products** form has a *Prices* `Repeater` on the `prices` relationship
-  (price-list select `->distinct()` + price) for quick per-list edits from the
-  product card. `PriceAdjuster` (`Modules/Pricing/app/Support/`) holds the
+- The **Products** and **variant** forms carry a *Prices* table
+  (`ProductPricesTable`) — a fixed row per **active** price list, only the price
+  editable, no add/remove. A blank price means "no price on that list"; clearing
+  a previously-set price **deletes** the `product_prices` row rather than storing
+  null. `ProductPriceMatrix` (`Modules/Pricing/app/Support/`) reads/writes that
+  grid for one product (same rule as `ManagePrices`); `PriceAdjuster` holds the
   reusable set/adjust logic.
 
 `PricingSeeder` creates a `Standard` default list; `ProductPriceSeeder` gives
