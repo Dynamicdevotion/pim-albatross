@@ -18,6 +18,7 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Modules\Localization\Filament\LocalizationPanelPlugin;
 use Modules\Products\Filament\ProductsPanelPlugin;
 use Modules\Taxonomies\Filament\TaxonomiesPanelPlugin;
 
@@ -43,6 +44,7 @@ class AdminPanelProvider extends PanelProvider
                 FilamentInfoWidget::class,
             ])
             ->plugins([
+                LocalizationPanelPlugin::make(),
                 ProductsPanelPlugin::make(),
                 TaxonomiesPanelPlugin::make(),
             ])

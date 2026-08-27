@@ -11,6 +11,9 @@ class LocalizationDatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call(ProductTranslationSeeder::class);
+        $this->call([
+            LanguageSeeder::class,
+            ProductTranslationSeeder::class,
+        ]);
     }
 }
