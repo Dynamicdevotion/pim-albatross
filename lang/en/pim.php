@@ -27,6 +27,12 @@ return [
         'sku' => 'SKU',
         'external_id' => 'External ID',
         'status' => 'Status',
+        'type' => 'Type',
+        'stock' => 'Stock',
+        'variants' => 'Variants',
+        'variant' => 'Variant',
+        'participating_taxonomies' => 'Taxonomies involved',
+        'variant_values' => 'Values to combine',
         'description' => 'Description',
         'slug' => 'Slug',
         'parent' => 'Parent',
@@ -56,10 +62,20 @@ return [
             'active' => 'Active',
             'archived' => 'Archived',
         ],
+        'type' => [
+            'simple' => 'Simple',
+            'variable' => 'Variable',
+            'variant' => 'Variant',
+        ],
         'price' => [
             'all' => 'All products',
             'with' => 'With a price',
             'without' => 'Without a price',
+        ],
+        'variant_scope' => [
+            'all' => 'All',
+            'variants' => 'Variants only',
+            'simple' => 'Simple only',
         ],
         'any' => 'Any',
         'none' => '— none —',
@@ -68,6 +84,8 @@ return [
     'filter' => [
         'missing_translation' => 'Missing translation',
         'price' => 'Price',
+        'type' => 'Type',
+        'variant_scope' => 'Variants',
     ],
 
     'action' => [
@@ -81,6 +99,8 @@ return [
         'update_view' => 'Update view',
         'delete_view' => 'Delete view',
         'add_price' => 'Add a price',
+        'generate_variants' => 'Generate variants',
+        'add_variant' => 'Add a variant',
     ],
 
     'section' => [
@@ -94,6 +114,9 @@ return [
         'percent' => 'e.g. 10 for +10%, -15 for −15%. Blank copies prices unchanged.',
         'percent_short' => 'e.g. 10 for +10%, -15 for −15%.',
         'adjust_category_scope' => 'Applies only to the price list selected above.',
+        'variant_sku' => 'Proposed — editable before generating.',
+        'generate_variants' => 'Pick which taxonomies define the variants and which of their values to combine. One variant is created per combination.',
+        'variable_no_price' => 'A variable product groups its variants; price and stock live on each variant.',
     ],
 
     'modal' => [
@@ -120,6 +143,14 @@ return [
         'prices_adjusted_selection' => ':count price(s) adjusted (rows without a price in this list were skipped)',
         'prices_adjusted_category' => ':count price(s) adjusted in this list',
         'select_rows_first' => 'Select some rows in the grid first',
+        'variants_generated' => ':count variant(s) generated',
+        'variants_generated_partial' => ':created generated, :skipped skipped (SKU already exists)',
+        'variants_none_selected' => 'Select at least one value to combine',
+        'too_many_combinations' => 'Too many combinations (:count) — select fewer values (max :max)',
+    ],
+
+    'column' => [
+        'variants_count' => '{0} no variants|{1} :count variant|[2,*] :count variants',
     ],
 
     'grid' => [
@@ -127,7 +158,15 @@ return [
         'row_cap' => 'Showing the first :count products — narrow the filters to reach the rest.',
     ],
 
+    'validation' => [
+        'type_locked_has_variants' => "Delete the linked variants before changing this product's type.",
+        'variant_needs_parent' => 'A variant must belong to a variable product.',
+        'only_variant_has_parent' => 'Only a variant can have a parent product.',
+        'parent_not_variable' => 'The parent product is not a variable product.',
+    ],
+
     'tooltip' => [
         'translated_languages' => 'Languages this product has content for',
+        'variants_count' => 'Number of variants of this product',
     ],
 ];

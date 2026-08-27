@@ -27,6 +27,12 @@ return [
         'sku' => 'SKU',
         'external_id' => 'ID esterno',
         'status' => 'Stato',
+        'type' => 'Tipo',
+        'stock' => 'Giacenza',
+        'variants' => 'Varianti',
+        'variant' => 'Variante',
+        'participating_taxonomies' => 'Tassonomie coinvolte',
+        'variant_values' => 'Valori da combinare',
         'description' => 'Descrizione',
         'slug' => 'Slug',
         'parent' => 'Genitore',
@@ -56,10 +62,20 @@ return [
             'active' => 'Attivo',
             'archived' => 'Archiviato',
         ],
+        'type' => [
+            'simple' => 'Semplice',
+            'variable' => 'Variabile',
+            'variant' => 'Variante',
+        ],
         'price' => [
             'all' => 'Tutti i prodotti',
             'with' => 'Con prezzo',
             'without' => 'Senza prezzo',
+        ],
+        'variant_scope' => [
+            'all' => 'Tutti',
+            'variants' => 'Solo varianti',
+            'simple' => 'Solo semplici',
         ],
         'any' => 'Qualsiasi',
         'none' => '— nessuna —',
@@ -68,6 +84,8 @@ return [
     'filter' => [
         'missing_translation' => 'Traduzione mancante',
         'price' => 'Prezzo',
+        'type' => 'Tipo',
+        'variant_scope' => 'Varianti',
     ],
 
     'action' => [
@@ -81,6 +99,8 @@ return [
         'update_view' => 'Aggiorna vista',
         'delete_view' => 'Elimina vista',
         'add_price' => 'Aggiungi un prezzo',
+        'generate_variants' => 'Genera varianti',
+        'add_variant' => 'Aggiungi una variante',
     ],
 
     'section' => [
@@ -94,6 +114,9 @@ return [
         'percent' => 'es. 10 per +10%, -15 per −15%. Vuoto copia i prezzi invariati.',
         'percent_short' => 'es. 10 per +10%, -15 per −15%.',
         'adjust_category_scope' => 'Si applica solo al listino selezionato sopra.',
+        'variant_sku' => 'Proposto — modificabile prima di generare.',
+        'generate_variants' => 'Scegli quali tassonomie definiscono le varianti e quali valori combinare. Viene creata una variante per ogni combinazione.',
+        'variable_no_price' => 'Un prodotto variabile raggruppa le sue varianti; prezzo e giacenza sono su ciascuna variante.',
     ],
 
     'modal' => [
@@ -120,6 +143,14 @@ return [
         'prices_adjusted_selection' => ':count prezzi modificati (le righe senza prezzo in questo listino sono state saltate)',
         'prices_adjusted_category' => ':count prezzi modificati in questo listino',
         'select_rows_first' => 'Seleziona prima alcune righe nella griglia',
+        'variants_generated' => ':count varianti generate',
+        'variants_generated_partial' => ':created generate, :skipped saltate (SKU già esistente)',
+        'variants_none_selected' => 'Seleziona almeno un valore da combinare',
+        'too_many_combinations' => 'Troppe combinazioni (:count) — seleziona meno valori (massimo :max)',
+    ],
+
+    'column' => [
+        'variants_count' => '{0} nessuna variante|{1} :count variante|[2,*] :count varianti',
     ],
 
     'grid' => [
@@ -127,7 +158,15 @@ return [
         'row_cap' => 'Mostrati i primi :count prodotti — restringi i filtri per vedere gli altri.',
     ],
 
+    'validation' => [
+        'type_locked_has_variants' => 'Elimina prima le varianti collegate per cambiare il tipo di questo prodotto.',
+        'variant_needs_parent' => 'Una variante deve appartenere a un prodotto variabile.',
+        'only_variant_has_parent' => 'Solo una variante può avere un prodotto genitore.',
+        'parent_not_variable' => 'Il prodotto genitore non è di tipo variabile.',
+    ],
+
     'tooltip' => [
         'translated_languages' => 'Lingue per cui questo prodotto ha contenuti',
+        'variants_count' => 'Numero di varianti di questo prodotto',
     ],
 ];
