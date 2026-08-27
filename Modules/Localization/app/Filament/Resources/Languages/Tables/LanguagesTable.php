@@ -24,43 +24,49 @@ class LanguagesTable
             ->defaultSort('name')
             ->columns([
                 TextColumn::make('code')
+                    ->label(__('pim.field.code'))
                     ->badge()
                     ->sortable(),
                 TextColumn::make('name')
+                    ->label(__('pim.field.name'))
                     ->searchable()
                     ->sortable(),
                 IconColumn::make('is_base')
-                    ->label('Base')
+                    ->label(__('pim.field.base'))
                     ->boolean(),
                 ToggleColumn::make('active')
+                    ->label(__('pim.field.active'))
                     // The base language is always on; a language that already
                     // has translated content must be switched off through the
                     // "Deactivate…" action so the keep/delete choice is made.
                     ->disabled(fn (Language $record): bool => $record->is_base
                         || ($record->active && LanguageContent::has($record)))
                     ->afterStateUpdated(fn (Language $record, bool $state) => Notification::make()
-                        ->title($record->name.' '.($state ? 'activated' : 'deactivated'))
+                        ->title(__(
+                            $state ? 'pim.notification.language_activated' : 'pim.notification.language_deactivated',
+                            ['name' => $record->name],
+                        ))
                         ->success()
                         ->send()),
             ])
             ->recordActions([
                 Action::make('deactivateWithContent')
-                    ->label('Deactivate…')
+                    ->label(__('pim.action.deactivate'))
                     ->icon('heroicon-o-eye-slash')
                     ->color('warning')
                     ->visible(fn (Language $record): bool => $record->active
                         && ! $record->is_base
                         && LanguageContent::has($record))
-                    ->modalHeading(fn (Language $record): string => 'Deactivate '.$record->name)
-                    ->modalDescription('This language already has translated content in the catalogue.')
+                    ->modalHeading(fn (Language $record): string => __('pim.modal.deactivate_heading', ['name' => $record->name]))
+                    ->modalDescription(__('pim.modal.deactivate_hint'))
                     ->form([
                         Radio::make('mode')
                             ->hiddenLabel()
                             ->required()
                             ->default('keep')
                             ->options([
-                                'keep' => 'Keep the content — just hide it (it reappears if the language is re-activated)',
-                                'delete' => 'Delete every translation in this language',
+                                'keep' => __('pim.modal.deactivate_mode.keep'),
+                                'delete' => __('pim.modal.deactivate_mode.delete'),
                             ]),
                     ])
                     ->action(function (Language $record, array $data): void {
@@ -71,10 +77,10 @@ class LanguagesTable
                         $record->update(['active' => false]);
 
                         Notification::make()
-                            ->title($record->name.' deactivated')
+                            ->title(__('pim.notification.language_deactivated', ['name' => $record->name]))
                             ->body($data['mode'] === 'delete'
-                                ? $removed.' translation row(s) removed.'
-                                : 'Content kept and hidden.')
+                                ? __('pim.notification.content_deleted', ['count' => $removed])
+                                : __('pim.notification.content_kept'))
                             ->success()
                             ->send();
                     }),

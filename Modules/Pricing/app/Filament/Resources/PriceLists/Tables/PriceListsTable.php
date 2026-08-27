@@ -24,15 +24,17 @@ class PriceListsTable
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->withCount('prices'))
             ->columns([
                 TextColumn::make('name')
+                    ->label(__('pim.field.name'))
                     ->searchable()
                     ->sortable(),
                 IconColumn::make('is_default')
-                    ->label('Default')
+                    ->label(__('pim.field.default'))
                     ->boolean(),
                 ToggleColumn::make('active')
+                    ->label(__('pim.field.active'))
                     ->disabled(fn (PriceList $record): bool => $record->is_default),
                 TextColumn::make('prices_count')
-                    ->label('Prices')
+                    ->label(__('pim.field.prices'))
                     ->sortable(),
                 TextColumn::make('created_at')
                     ->dateTime()
@@ -41,17 +43,17 @@ class PriceListsTable
             ])
             ->recordActions([
                 Action::make('setDefault')
-                    ->label('Set as default')
+                    ->label(__('pim.action.set_default'))
                     ->icon('heroicon-o-star')
                     ->color('warning')
                     ->visible(fn (PriceList $record): bool => ! $record->is_default)
                     ->requiresConfirmation()
-                    ->modalDescription('This list becomes the default and is forced active; the current default is demoted.')
+                    ->modalDescription(__('pim.modal.set_default_hint'))
                     ->action(function (PriceList $record): void {
                         $record->forceFill(['is_default' => true, 'active' => true])->save();
 
                         Notification::make()
-                            ->title($record->name.' is now the default price list')
+                            ->title(__('pim.notification.price_list_default', ['name' => $record->name]))
                             ->success()
                             ->send();
                     }),

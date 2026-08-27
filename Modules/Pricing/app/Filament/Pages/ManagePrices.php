@@ -64,6 +64,21 @@ class ManagePrices extends Page
         return PriceList::query()->exists();
     }
 
+    public static function getNavigationGroup(): string|\UnitEnum|null
+    {
+        return __('pim.nav.pricing');
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return __('pim.page.bulk_prices.nav');
+    }
+
+    public function getTitle(): string
+    {
+        return __('pim.page.bulk_prices.title');
+    }
+
     public function mount(): void
     {
         $this->priceListId = PriceList::query()->where('is_default', true)->value('id')
@@ -132,7 +147,11 @@ class ManagePrices extends Page
      */
     public function columnCatalogue(): array
     {
-        return ['name' => 'Name', 'sku' => 'SKU', 'status' => 'Status'];
+        return [
+            'name' => __('pim.field.name'),
+            'sku' => __('pim.field.sku'),
+            'status' => __('pim.field.status'),
+        ];
     }
 
     /**
@@ -140,7 +159,7 @@ class ManagePrices extends Page
      */
     public function gridHeaders(): array
     {
-        return $this->columnCatalogue() + ['price' => 'Price'];
+        return $this->columnCatalogue() + ['price' => __('pim.field.price')];
     }
 
     /**
@@ -253,7 +272,7 @@ class ManagePrices extends Page
     protected function assertSelection(): bool
     {
         if ($this->selectedProductIds === []) {
-            Notification::make()->title('Select some rows in the grid first')->warning()->send();
+            Notification::make()->title(__('pim.notification.select_rows_first'))->warning()->send();
 
             return false;
         }
@@ -264,10 +283,10 @@ class ManagePrices extends Page
     public function setFixedPriceAction(): Action
     {
         return Action::make('setFixedPrice')
-            ->label('Set price')
+            ->label(__('pim.action.set_price'))
             ->icon('heroicon-o-currency-euro')
             ->schema([
-                TextInput::make('price')->numeric()->minValue(0)->required()
+                TextInput::make('price')->label(__('pim.field.price'))->numeric()->minValue(0)->required()
                     ->extraInputAttributes(['step' => '0.01']),
             ])
             ->action(function (array $data): void {
@@ -276,18 +295,18 @@ class ManagePrices extends Page
                 }
 
                 $n = PriceAdjuster::setFixed($this->selectedProductIds, $this->priceListId, (float) $data['price']);
-                $this->notifyDone("$n price(s) set");
+                $this->notifyDone(__('pim.notification.prices_set', ['count' => $n]));
             });
     }
 
     public function adjustSelectionAction(): Action
     {
         return Action::make('adjustSelection')
-            ->label('Adjust % (selection)')
+            ->label(__('pim.action.adjust_selection'))
             ->icon('heroicon-o-receipt-percent')
             ->schema([
-                TextInput::make('percent')->numeric()->required()
-                    ->helperText('e.g. 10 for +10%, -15 for −15%.'),
+                TextInput::make('percent')->label(__('pim.field.adjustment_percent'))->numeric()->required()
+                    ->helperText(__('pim.helper.percent_short')),
             ])
             ->action(function (array $data): void {
                 if (! $this->assertSelection()) {
@@ -295,23 +314,23 @@ class ManagePrices extends Page
                 }
 
                 $n = PriceAdjuster::adjustProducts($this->selectedProductIds, $this->priceListId, (float) $data['percent']);
-                $this->notifyDone("$n price(s) adjusted (rows without a price in this list were skipped)");
+                $this->notifyDone(__('pim.notification.prices_adjusted_selection', ['count' => $n]));
             });
     }
 
     public function adjustCategoryAction(): Action
     {
         return Action::make('adjustCategory')
-            ->label('Adjust % (category)')
+            ->label(__('pim.action.adjust_category'))
             ->icon('heroicon-o-tag')
             ->schema([
                 Select::make('taxonomy_term_id')
-                    ->label('Category')
+                    ->label(__('pim.field.category'))
                     ->options(fn (): array => $this->categoryOptions())
                     ->searchable()
                     ->required(),
-                TextInput::make('percent')->numeric()->required()
-                    ->helperText('Applies only to the price list selected above.'),
+                TextInput::make('percent')->label(__('pim.field.adjustment_percent'))->numeric()->required()
+                    ->helperText(__('pim.helper.adjust_category_scope')),
             ])
             ->action(function (array $data): void {
                 $n = PriceAdjuster::adjustCategory(
@@ -319,7 +338,7 @@ class ManagePrices extends Page
                     $this->priceListId,
                     (float) $data['percent'],
                 );
-                $this->notifyDone("$n price(s) adjusted in this list");
+                $this->notifyDone(__('pim.notification.prices_adjusted_category', ['count' => $n]));
             });
     }
 

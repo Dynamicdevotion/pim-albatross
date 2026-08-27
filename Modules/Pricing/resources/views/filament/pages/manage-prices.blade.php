@@ -2,7 +2,7 @@
     {{-- toolbar: list, saved views, filters --}}
     <div class="flex flex-wrap items-end gap-3">
         <label class="text-sm">
-            <span class="fi-fo-field-wrp-label mb-1 block text-sm font-medium">Price list</span>
+            <span class="fi-fo-field-wrp-label mb-1 block text-sm font-medium">{{ __('pim.field.price_list') }}</span>
             <x-filament::input.wrapper>
                 <x-filament::input.select wire:model.live="priceListId">
                     @foreach ($this->priceListOptions() as $id => $name)
@@ -13,10 +13,10 @@
         </label>
 
         <label class="text-sm">
-            <span class="fi-fo-field-wrp-label mb-1 block text-sm font-medium">Saved view</span>
+            <span class="fi-fo-field-wrp-label mb-1 block text-sm font-medium">{{ __('pim.field.saved_view') }}</span>
             <x-filament::input.wrapper>
                 <x-filament::input.select wire:model.live="savedViewId">
-                    <option value="">— none —</option>
+                    <option value="">{{ __('pim.option.none') }}</option>
                     @foreach ($this->savedViewOptions() as $id => $name)
                         <option value="{{ $id }}">{{ $name }}</option>
                     @endforeach
@@ -33,28 +33,28 @@
 
     <div class="flex flex-wrap items-end gap-3">
         <label class="text-sm">
-            <span class="fi-fo-field-wrp-label mb-1 block text-sm font-medium">Search</span>
+            <span class="fi-fo-field-wrp-label mb-1 block text-sm font-medium">{{ __('pim.field.search') }}</span>
             <x-filament::input.wrapper prefix-icon="heroicon-m-magnifying-glass">
-                <x-filament::input type="text" wire:model.live.debounce.400ms="search" placeholder="Name or SKU" />
+                <x-filament::input type="text" wire:model.live.debounce.400ms="search" placeholder="{{ __('pim.grid.search_placeholder') }}" />
             </x-filament::input.wrapper>
         </label>
 
         <label class="text-sm">
-            <span class="fi-fo-field-wrp-label mb-1 block text-sm font-medium">Price</span>
+            <span class="fi-fo-field-wrp-label mb-1 block text-sm font-medium">{{ __('pim.filter.price') }}</span>
             <x-filament::input.wrapper>
                 <x-filament::input.select wire:model.live="hasPrice">
-                    <option value="">All products</option>
-                    <option value="yes">With a price</option>
-                    <option value="no">Without a price</option>
+                    <option value="">{{ __('pim.option.price.all') }}</option>
+                    <option value="yes">{{ __('pim.option.price.with') }}</option>
+                    <option value="no">{{ __('pim.option.price.without') }}</option>
                 </x-filament::input.select>
             </x-filament::input.wrapper>
         </label>
 
         <label class="text-sm">
-            <span class="fi-fo-field-wrp-label mb-1 block text-sm font-medium">Category</span>
+            <span class="fi-fo-field-wrp-label mb-1 block text-sm font-medium">{{ __('pim.field.category') }}</span>
             <x-filament::input.wrapper>
                 <x-filament::input.select wire:model.live="categoryTermId">
-                    <option value="">Any</option>
+                    <option value="">{{ __('pim.option.any') }}</option>
                     @foreach ($this->categoryOptions() as $id => $label)
                         <option value="{{ $id }}">{{ $label }}</option>
                     @endforeach
@@ -65,7 +65,7 @@
 
     {{-- columns + bulk actions --}}
     <div class="flex flex-wrap items-center gap-4">
-        <span class="text-sm font-medium">Columns:</span>
+        <span class="text-sm font-medium">{{ __('pim.field.columns') }}:</span>
         @foreach ($this->columnCatalogue() as $key => $label)
             <label class="inline-flex items-center gap-1.5 text-sm">
                 <input type="checkbox" wire:model.live="visibleColumns" value="{{ $key }}"
@@ -83,7 +83,7 @@
 
     @if ($this->gridCapped())
         <x-filament::badge color="warning">
-            Showing the first {{ number_format(1000) }} products — narrow the filters to reach the rest.
+            {{ __('pim.grid.row_cap', ['count' => number_format(1000)]) }}
         </x-filament::badge>
     @endif
 

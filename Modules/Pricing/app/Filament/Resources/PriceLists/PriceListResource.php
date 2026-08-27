@@ -26,6 +26,21 @@ class PriceListResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
+    public static function getModelLabel(): string
+    {
+        return __('pim.resource.price_list.label');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('pim.resource.price_list.plural');
+    }
+
+    public static function getNavigationGroup(): string|\UnitEnum|null
+    {
+        return __('pim.nav.pricing');
+    }
+
     public static function form(Schema $schema): Schema
     {
         return PriceListForm::configure($schema);

@@ -85,10 +85,11 @@ trait InteractsWithSavedViews
     public function saveViewAction(): Action
     {
         return Action::make('saveView')
-            ->label('Save as view')
+            ->label(__('pim.action.save_view'))
             ->icon('heroicon-o-bookmark')
             ->schema([
                 TextInput::make('name')
+                    ->label(__('pim.field.name'))
                     ->required()
                     ->maxLength(255),
             ])
@@ -110,7 +111,7 @@ trait InteractsWithSavedViews
                 $this->savedViewId = $view->getKey();
 
                 Notification::make()
-                    ->title("View \"{$view->name}\" saved")
+                    ->title(__('pim.notification.view_saved', ['name' => $view->name]))
                     ->success()
                     ->send();
             });
@@ -119,7 +120,7 @@ trait InteractsWithSavedViews
     public function updateViewAction(): Action
     {
         return Action::make('updateView')
-            ->label('Update view')
+            ->label(__('pim.action.update_view'))
             ->icon('heroicon-o-arrow-path')
             ->visible(fn (): bool => filled($this->savedViewId))
             ->requiresConfirmation()
@@ -138,7 +139,7 @@ trait InteractsWithSavedViews
                 ]);
 
                 Notification::make()
-                    ->title("View \"{$view->name}\" updated")
+                    ->title(__('pim.notification.view_updated', ['name' => $view->name]))
                     ->success()
                     ->send();
             });
@@ -147,7 +148,7 @@ trait InteractsWithSavedViews
     public function deleteViewAction(): Action
     {
         return Action::make('deleteView')
-            ->label('Delete view')
+            ->label(__('pim.action.delete_view'))
             ->icon('heroicon-o-trash')
             ->color('danger')
             ->visible(fn (): bool => filled($this->savedViewId))
@@ -157,7 +158,7 @@ trait InteractsWithSavedViews
                 $this->savedViewId = null;
 
                 Notification::make()
-                    ->title('View deleted')
+                    ->title(__('pim.notification.view_deleted'))
                     ->success()
                     ->send();
             });

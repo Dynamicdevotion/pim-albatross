@@ -17,18 +17,20 @@ class PriceListForm
         return $schema
             ->components([
                 TextInput::make('name')
+                    ->label(__('pim.field.name'))
                     ->required()
                     ->maxLength(255),
                 Toggle::make('active')
+                    ->label(__('pim.field.active'))
                     ->default(true),
 
-                Section::make('Populate prices from another list')
-                    ->description('Optional. Copies every price from the chosen list into the new one, applying a percentage change.')
+                Section::make(__('pim.section.populate_prices'))
+                    ->description(__('pim.section.populate_prices_hint'))
                     ->visible(fn (string $operation): bool => $operation === 'create')
                     ->columns(2)
                     ->schema([
                         Select::make('source_price_list_id')
-                            ->label('Source list')
+                            ->label(__('pim.field.source_list'))
                             ->options(fn (): array => PriceList::query()
                                 ->orderByDesc('is_default')
                                 ->pluck('name', 'id')
@@ -37,9 +39,9 @@ class PriceListForm
                             ->live()
                             ->dehydrated(),
                         TextInput::make('adjustment_percent')
-                            ->label('Adjustment %')
+                            ->label(__('pim.field.adjustment_percent'))
                             ->numeric()
-                            ->helperText('e.g. 10 for +10%, -15 for −15%. Blank copies prices unchanged.')
+                            ->helperText(__('pim.helper.percent'))
                             ->visible(fn (Get $get): bool => filled($get('source_price_list_id')))
                             ->dehydrated(),
                     ]),

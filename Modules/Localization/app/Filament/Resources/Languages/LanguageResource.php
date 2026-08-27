@@ -22,6 +22,16 @@ class LanguageResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
+    public static function getModelLabel(): string
+    {
+        return __('pim.resource.language.label');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('pim.resource.language.plural');
+    }
+
     public static function form(Schema $schema): Schema
     {
         return LanguageForm::configure($schema);

@@ -13,16 +13,18 @@ class LanguageForm
         return $schema
             ->components([
                 TextInput::make('code')
-                    ->label('Code')
-                    ->helperText('ISO 639-1, lowercase (e.g. "it", "en").')
+                    ->label(__('pim.field.code'))
+                    ->helperText(__('pim.helper.language_code'))
                     ->required()
                     ->maxLength(5)
                     ->unique(ignoreRecord: true)
                     ->dehydrateStateUsing(fn (?string $state): string => strtolower(trim((string) $state))),
                 TextInput::make('name')
+                    ->label(__('pim.field.name'))
                     ->required()
                     ->maxLength(255),
-                Toggle::make('active'),
+                Toggle::make('active')
+                    ->label(__('pim.field.active')),
             ]);
     }
 }
