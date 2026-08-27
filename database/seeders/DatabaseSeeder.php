@@ -25,8 +25,9 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call([
-            TaxonomiesDatabaseSeeder::class,
+            // Localization first: it seeds the languages the others rely on.
             LocalizationDatabaseSeeder::class,
+            TaxonomiesDatabaseSeeder::class,
         ]);
     }
 }

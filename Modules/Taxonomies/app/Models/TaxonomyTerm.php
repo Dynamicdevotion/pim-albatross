@@ -2,28 +2,27 @@
 
 namespace Modules\Taxonomies\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Localization\Support\Locales;
 use Modules\Products\Models\Product;
 use Modules\Taxonomies\Database\Factories\TaxonomyTermFactory;
-use Modules\Taxonomies\Models\Concerns\HasGeneratedSlug;
 
 /**
- * A single value of a taxonomy (e.g. "Abbigliamento" in "Categoria"), optionally
- * nested under a parent term of the same taxonomy.
+ * A single value of a taxonomy (e.g. "Abbigliamento"), optionally nested under a
+ * parent term. Its name is translatable (taxonomy_term_translations).
  */
 class TaxonomyTerm extends Model
 {
     use HasFactory;
-    use HasGeneratedSlug;
 
     protected $fillable = [
         'taxonomy_id',
         'parent_id',
-        'name',
         'slug',
     ];
 
@@ -42,12 +41,32 @@ class TaxonomyTerm extends Model
         return $this->hasMany(self::class, 'parent_id');
     }
 
-    /**
-     * Products tagged with this term.
-     */
     public function products(): BelongsToMany
     {
         return $this->belongsToMany(Product::class, 'product_taxonomy_term');
+    }
+
+    public function translations(): HasMany
+    {
+        return $this->hasMany(TaxonomyTermTranslation::class);
+    }
+
+    public function translate(string $locale): ?TaxonomyTermTranslation
+    {
+        $languageId = Locales::idFor($locale);
+
+        if ($languageId === null) {
+            return null;
+        }
+
+        return $this->relationLoaded('translations')
+            ? $this->translations->firstWhere('language_id', $languageId)
+            : $this->translations()->where('language_id', $languageId)->first();
+    }
+
+    protected function name(): Attribute
+    {
+        return Attribute::get(fn (): ?string => $this->translate(Locales::baseCode())?->name);
     }
 
     /**
@@ -65,11 +84,6 @@ class TaxonomyTerm extends Model
         }
 
         return $ids;
-    }
-
-    protected function slugScope(): array
-    {
-        return ['taxonomy_id' => $this->taxonomy_id];
     }
 
     protected static function newFactory(): TaxonomyTermFactory

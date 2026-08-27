@@ -8,17 +8,24 @@ use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Modules\Localization\Support\Locales;
 
 class TaxonomiesTable
 {
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->withCount('terms'))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->with('translations')
+                ->withCount('terms'))
             ->columns([
                 TextColumn::make('name')
-                    ->searchable()
-                    ->sortable(),
+                    ->label('Name')
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas(
+                        'translations',
+                        fn (Builder $q) => $q->where('language_id', Locales::idFor(Locales::baseCode()))
+                            ->where('name', 'like', "%{$search}%"),
+                    )),
                 TextColumn::make('slug')
                     ->searchable()
                     ->toggleable(),

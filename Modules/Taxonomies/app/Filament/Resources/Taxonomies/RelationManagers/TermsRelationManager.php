@@ -10,41 +10,67 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Modules\Localization\Filament\Concerns\HandlesTranslatableName;
+use Modules\Localization\Models\Language;
+use Modules\Localization\Support\Locales;
 use Modules\Taxonomies\Models\TaxonomyTerm;
 
 class TermsRelationManager extends RelationManager
 {
+    use HandlesTranslatableName;
+
     protected static string $relationship = 'terms';
 
-    protected static ?string $recordTitleAttribute = 'name';
+    protected static ?string $recordTitleAttribute = 'slug';
+
+    protected function slugModelClass(): string
+    {
+        return TaxonomyTerm::class;
+    }
+
+    protected function slugScope(): array
+    {
+        return ['taxonomy_id' => $this->getOwnerRecord()->getKey()];
+    }
 
     public function form(Schema $schema): Schema
     {
         return $schema
             ->components([
-                TextInput::make('name')
-                    ->required()
-                    ->maxLength(255),
+                Tabs::make('translations')
+                    ->columnSpanFull()
+                    ->tabs(fn (): array => Locales::active()
+                        ->map(fn (Language $language): Tabs\Tab => Tabs\Tab::make(
+                            $language->name.($language->is_base ? ' — base' : ''),
+                        )->schema([
+                            TextInput::make("translations.{$language->code}.name")
+                                ->label('Name')
+                                ->maxLength(255)
+                                ->required($language->is_base),
+                        ]))
+                        ->all()),
                 TextInput::make('slug')
                     ->maxLength(255)
-                    ->helperText('Leave blank to generate it from the name.'),
+                    ->helperText('Leave blank to generate it from the base name.'),
                 Select::make('parent_id')
                     ->label('Parent')
                     ->searchable()
                     ->options(fn (?TaxonomyTerm $record): array => $this->getOwnerRecord()
                         ->terms()
+                        ->with('translations')
+                        ->get()
                         ->when(
                             $record,
-                            fn (Builder $query) => $query
-                                ->whereKeyNot($record->getKey())
-                                ->whereNotIn('id', $record->descendantIds()),
+                            fn ($terms) => $terms
+                                ->whereNotIn('id', [$record->getKey(), ...$record->descendantIds()]),
                         )
-                        ->orderBy('name')
-                        ->pluck('name', 'id')
+                        ->mapWithKeys(fn (TaxonomyTerm $term): array => [$term->id => $term->name])
                         ->all()),
             ]);
     }
@@ -52,26 +78,39 @@ class TermsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->recordTitleAttribute('name')
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->withCount('children'))
+            ->recordTitleAttribute('slug')
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->with(['translations', 'parent.translations'])
+                ->withCount('children'))
             ->columns([
                 TextColumn::make('name')
-                    ->searchable()
-                    ->sortable(),
+                    ->label('Name')
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas(
+                        'translations',
+                        fn (Builder $q) => $q->where('language_id', Locales::idFor(Locales::baseCode()))
+                            ->where('name', 'like', "%{$search}%"),
+                    )),
                 TextColumn::make('parent.name')
                     ->label('Parent')
-                    ->placeholder('—')
-                    ->sortable(),
+                    ->placeholder('—'),
                 TextColumn::make('slug')
                     ->toggleable(),
                 TextColumn::make('children_count')
                     ->label('Children'),
             ])
             ->headerActions([
-                CreateAction::make(),
+                CreateAction::make()
+                    ->mutateDataUsing(fn (array $data): array => $this->extractNameTranslations($data))
+                    ->after(fn (Model $record) => $this->saveNameTranslations($record)),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->mutateRecordDataUsing(fn (array $data, TaxonomyTerm $record): array => [
+                        ...$data,
+                        'translations' => $this->nameTranslationsFor($record),
+                    ])
+                    ->mutateDataUsing(fn (array $data): array => $this->extractNameTranslations($data))
+                    ->after(fn (Model $record) => $this->saveNameTranslations($record)),
                 DeleteAction::make(),
             ])
             ->toolbarActions([
