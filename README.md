@@ -159,11 +159,17 @@ app/
 │       │   ├── ListProducts.php
 │       │   ├── CreateProduct.php
 │       │   └── EditProduct.php
-│       ├── Concerns/HandlesProductTranslations.php  # per-locale load/save
+│       ├── Concerns/
+│       │   ├── HandlesProductTranslations.php    # per-locale load/save (pages)
+│       │   └── HandlesVariantTranslations.php    # same, for the variant RM actions
+│       ├── RelationManagers/VariantsRelationManager.php  # variants + "Generate variants"
 │       ├── Schemas/ProductForm.php          # create/edit form schema (+ translation tabs)
 │       └── Tables/ProductsTable.php         # list table: columns, filters, actions
+├── Enums/ProductType.php                    # simple / variable / variant
+├── Exceptions/CannotChangeProductType.php
 ├── Http/Controllers/ProductsController.php
 ├── Models/Product.php
+├── Support/VariantGenerator.php             # pure combination / SKU / translation-copy logic
 └── Providers/
     ├── ProductsServiceProvider.php
     ├── EventServiceProvider.php
@@ -185,13 +191,19 @@ module.json                                  # name, alias, service providers
 | Column | Type | Notes |
 |---|---|---|
 | `id` | bigint | PK |
+| `type` | string | `simple` (default) / `variable` / `variant` — see *Variable products* |
+| `parent_id` | bigint | nullable FK → `products`, `cascadeOnDelete`; set only on a variant |
 | `sku` | string | unique, required |
 | `external_id` | string | nullable |
 | `status` | string | default `draft` (`draft` / `active` / `archived` in the UI) |
+| `stock` | int | nullable, default 0; `null` for `variable` rows |
 | `created_at` / `updated_at` | timestamp | |
 
-Mass-assignable: `sku`, `external_id`, `status`. Translatable content
-(`name`, `description`) lives in the Localization module — see below.
+Mass-assignable: `type`, `parent_id`, `sku`, `external_id`, `status`, `stock`.
+Translatable content (`name`, `description`) lives in the Localization module —
+see below. A `saving` guard (`CannotChangeProductType`) keeps the
+type/`parent_id` shape consistent and blocks turning a variable that still has
+variants into another type.
 
 ### Admin routes
 
@@ -202,6 +214,31 @@ Mass-assignable: `sku`, `external_id`, `status`. Translatable content
 | `GET /admin/products/{record}/edit` | `filament.admin.resources.products.edit` |
 
 All behind auth; unauthenticated requests redirect to `/admin/login`.
+
+### Variable products
+
+A **single self-referencing table** — every variant is a full `Product`, so it
+inherits Pricing, translations, taxonomy terms and everything else for free.
+
+| Type | Role |
+|---|---|
+| `simple` | independent product; behaviour unchanged |
+| `variable` | container: shared name/description/common terms, **no own price or stock** (those fields are hidden in the form) |
+| `variant` | child of a variable: own SKU, own translations (seeded from the parent), own per-list prices, own stock, own distinguishing terms |
+
+- **List** (`/admin/products`): top-level rows only (`whereNull('parent_id')`);
+  a variable shows a "*N* variants" count and there is a Type filter.
+- **Variants are managed inside the parent**: `VariantsRelationManager` (visible
+  only for `variable`) — an inline table (SKU / stock editable in place), a full
+  variant edit form, and **Generate variants**: a wizard that takes the chosen
+  taxonomies and which of their values to combine, then creates one variant per
+  combination with an editable SKU (parent SKU + term slugs) and name (copied
+  from the parent). Existing SKUs are skipped; capped at
+  `VariantGenerator::MAX_COMBINATIONS` (100).
+- **Price grid** (`/admin/prices`): variable containers are excluded; variant
+  rows read `— Parent › distinguishing part` and a "Variants / simple / all"
+  filter is available. `Modules\Products\Support\VariantGenerator` holds the pure
+  combination/SKU/translation-copy logic.
 
 ---
 
