@@ -51,6 +51,17 @@
         </label>
 
         <label class="text-sm">
+            <span class="fi-fo-field-wrp-label mb-1 block text-sm font-medium">{{ __('pim.filter.variant_scope') }}</span>
+            <x-filament::input.wrapper>
+                <x-filament::input.select wire:model.live="variantScope">
+                    <option value="">{{ __('pim.option.variant_scope.all') }}</option>
+                    <option value="variants">{{ __('pim.option.variant_scope.variants') }}</option>
+                    <option value="simple">{{ __('pim.option.variant_scope.simple') }}</option>
+                </x-filament::input.select>
+            </x-filament::input.wrapper>
+        </label>
+
+        <label class="text-sm">
             <span class="fi-fo-field-wrp-label mb-1 block text-sm font-medium">{{ __('pim.field.category') }}</span>
             <x-filament::input.wrapper>
                 <x-filament::input.select wire:model.live="categoryTermId">

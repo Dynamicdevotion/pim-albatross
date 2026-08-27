@@ -275,4 +275,73 @@ class PricingTest extends TestCase
         (new ProductPriceSeeder())->run();
         $this->assertDatabaseCount('product_prices', 2);
     }
+
+    // ---- variable products in the price grid --------------------------------
+
+    private function variableWithVariant(string $sku, string $name, ?string $colour = null): array
+    {
+        $parent = \Modules\Products\Models\Product::factory()->variable()->create(['sku' => $sku]);
+        $parent->translations()->create(['locale' => 'it', 'name' => $name]);
+
+        $selection = [];
+
+        if ($colour !== null) {
+            $tax = Taxonomy::factory()->named('Colore')->create();
+            $term = \Modules\Taxonomies\Models\TaxonomyTerm::factory()->named($colour)->for($tax)->create();
+            $selection = [$term->taxonomy_id => [$term->id]];
+        }
+
+        $variant = $selection === []
+            ? \Modules\Products\Models\Product::factory()->variantOf($parent)->create(['sku' => $sku.'-V'])
+            : (new \Modules\Products\Support\VariantGenerator())->generate($parent, $selection)['variants']->first();
+
+        return [$parent, $variant];
+    }
+
+    public function test_price_grid_excludes_variable_parents_and_labels_variants(): void
+    {
+        $list = PriceList::create(['name' => 'Std', 'is_default' => true]);
+        [$parent, $variant] = $this->variableWithVariant('TSHIRT', 'Maglietta', 'Rosso');
+        $this->product('Semplice', 'PLAIN-1');
+
+        $rows = collect(Livewire::test(ManagePrices::class)->set('priceListId', $list->id)->instance()->rows());
+
+        $this->assertContains('TSHIRT-ROSSO', $rows->pluck('sku')->all());
+        $this->assertContains('PLAIN-1', $rows->pluck('sku')->all());
+        $this->assertNotContains('TSHIRT', $rows->pluck('sku')->all()); // the variable container is not a row
+
+        $variantRow = $rows->firstWhere('sku', 'TSHIRT-ROSSO');
+        $this->assertSame('— Maglietta › Rosso', $variantRow['name']);
+    }
+
+    public function test_price_grid_variant_scope_filter(): void
+    {
+        $list = PriceList::create(['name' => 'Std', 'is_default' => true]);
+        [, $variant] = $this->variableWithVariant('AAA', 'Alpha');
+        $this->product('Semplice', 'PLAIN-9');
+
+        $page = Livewire::test(ManagePrices::class)->set('priceListId', $list->id)->instance();
+        $skus = fn () => collect($page->rows())->pluck('sku')->sort()->values()->all();
+
+        $page->variantScope = 'variants';
+        $this->assertSame(['AAA-V'], $skus());
+
+        $page->variantScope = 'simple';
+        $this->assertSame(['PLAIN-9'], $skus());
+
+        $page->variantScope = null;
+        $this->assertSame(['AAA-V', 'PLAIN-9'], $skus());
+    }
+
+    public function test_price_grid_search_matches_the_parent_name(): void
+    {
+        $list = PriceList::create(['name' => 'Std', 'is_default' => true]);
+        [, $variant] = $this->variableWithVariant('MGL', 'Maglietta', 'Blu');
+        $this->product('Scarpe', 'SHOE-1');
+
+        $page = Livewire::test(ManagePrices::class)->set('priceListId', $list->id)->instance();
+        $page->search = 'Magli';
+
+        $this->assertSame(['MGL-BLU'], collect($page->rows())->pluck('sku')->all());
+    }
 }

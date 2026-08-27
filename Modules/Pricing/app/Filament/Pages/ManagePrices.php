@@ -15,6 +15,7 @@ use Modules\Localization\Support\Locales;
 use Modules\Pricing\Models\PriceList;
 use Modules\Pricing\Models\ProductPrice;
 use Modules\Pricing\Support\PriceAdjuster;
+use Modules\Products\Enums\ProductType;
 use Modules\Products\Models\Product;
 use Modules\SavedViews\Filament\Concerns\InteractsWithSavedViews;
 use Modules\Taxonomies\Models\Taxonomy;
@@ -24,6 +25,10 @@ use Modules\Taxonomies\Models\TaxonomyTerm;
  * Excel-like editor for every product's price in one price list. A jspreadsheet
  * grid (drag select, paste from Excel, drag-fill) sits under a toolbar of
  * filters, per-user saved views, column toggles and bulk % actions.
+ *
+ * Rows are the priceable products — simple products and variants; the variable
+ * container itself has no price and is left out. Variant rows are labelled
+ * "— Parent › Variant" and ordered next to their siblings.
  */
 class ManagePrices extends Page
 {
@@ -52,6 +57,8 @@ class ManagePrices extends Page
     public ?string $hasPrice = null;      // 'yes' | 'no' | null
 
     public ?int $categoryTermId = null;
+
+    public ?string $variantScope = null;  // 'variants' | 'simple' | null
 
     /** @var list<string> */
     public array $visibleColumns = ['name', 'sku', 'status'];
@@ -99,6 +106,7 @@ class ManagePrices extends Page
                 'search' => $this->search,
                 'hasPrice' => $this->hasPrice,
                 'categoryTermId' => $this->categoryTermId,
+                'variantScope' => $this->variantScope,
             ],
             'columns' => array_values($this->visibleColumns),
         ];
@@ -110,6 +118,7 @@ class ManagePrices extends Page
         $this->search = (string) ($filters['search'] ?? '');
         $this->hasPrice = $filters['hasPrice'] ?? null;
         $this->categoryTermId = isset($filters['categoryTermId']) ? (int) $filters['categoryTermId'] : null;
+        $this->variantScope = $filters['variantScope'] ?? null;
         $this->visibleColumns = $state['columns'] ?? ['name', 'sku', 'status'];
 
         $this->refreshGrid();
@@ -119,7 +128,7 @@ class ManagePrices extends Page
 
     public function updated(string $property): void
     {
-        if (in_array($property, ['priceListId', 'search', 'hasPrice', 'categoryTermId', 'visibleColumns'], true)) {
+        if (in_array($property, ['priceListId', 'search', 'hasPrice', 'categoryTermId', 'variantScope', 'visibleColumns'], true)) {
             $this->refreshGrid();
         }
     }
@@ -186,25 +195,55 @@ class ManagePrices extends Page
     }
 
     /**
-     * @return array<int, array{product_id: int, name: string|null, sku: string, status: string, price: string|null}>
+     * @return array<int, array{product_id: int, name: string, sku: string, status: string, price: string|null}>
      */
     public function rows(): array
     {
         return $this->baseQuery()
             ->with([
                 'translations',
+                'parent.translations',
+                'taxonomyTerms.translations',
                 'prices' => fn ($query) => $query->where('price_list_id', $this->priceListId),
             ])
             ->limit(self::ROW_CAP)
             ->get()
             ->map(fn (Product $product): array => [
                 'product_id' => $product->id,
-                'name' => $product->translate(Locales::baseCode())?->name,
+                'name' => $this->rowLabel($product),
                 'sku' => $product->sku,
                 'status' => $product->status,
                 'price' => $product->prices->first()?->price,
             ])
             ->all();
+    }
+
+    /**
+     * A simple product shows its base name; a variant shows
+     * "— Parent › distinguishing part" (own name if it differs from the
+     * parent, otherwise its taxonomy terms, otherwise its SKU).
+     */
+    private function rowLabel(Product $product): string
+    {
+        $base = Locales::baseCode();
+        $ownName = $product->translate($base)?->name;
+
+        if (! $product->isVariant()) {
+            return $ownName ?? $product->sku;
+        }
+
+        $parentName = $product->parent?->translate($base)?->name
+            ?? $product->parent?->sku
+            ?? '?';
+
+        $distinct = $ownName !== null && $ownName !== $parentName
+            ? $ownName
+            : $product->taxonomyTerms
+                ->map(fn (TaxonomyTerm $term): ?string => $term->translate($base)?->name)
+                ->filter()
+                ->implode(' · ');
+
+        return '— '.$parentName.' › '.($distinct !== '' ? $distinct : $product->sku);
     }
 
     /**
@@ -215,9 +254,16 @@ class ManagePrices extends Page
         $baseLanguageId = Locales::idFor(Locales::baseCode());
 
         return Product::query()
+            // Priceable rows only: variable containers carry no price of their own.
+            ->where('type', '!=', ProductType::Variable->value)
+            ->when($this->variantScope === 'variants', fn (Builder $q) => $q->where('type', ProductType::Variant->value))
+            ->when($this->variantScope === 'simple', fn (Builder $q) => $q->where('type', ProductType::Simple->value))
             ->when($this->search !== '', fn (Builder $q) => $q->where(fn (Builder $w) => $w
                 ->where('sku', 'like', "%{$this->search}%")
                 ->orWhereHas('translations', fn (Builder $t) => $t
+                    ->where('language_id', $baseLanguageId)
+                    ->where('name', 'like', "%{$this->search}%"))
+                ->orWhereHas('parent.translations', fn (Builder $t) => $t
                     ->where('language_id', $baseLanguageId)
                     ->where('name', 'like', "%{$this->search}%"))))
             ->when($this->hasPrice === 'yes', fn (Builder $q) => $q->whereHas(
@@ -231,6 +277,9 @@ class ManagePrices extends Page
                 $ids = $term ? [$term->getKey(), ...$term->descendantIds()] : [$this->categoryTermId];
                 $q->whereHas('taxonomyTerms', fn (Builder $t) => $t->whereIn('taxonomy_terms.id', $ids));
             })
+            // Keep a variant family together, then order by SKU.
+            ->orderByRaw('COALESCE(parent_id, id)')
+            ->orderByRaw('parent_id IS NOT NULL')
             ->orderBy('sku');
     }
 
