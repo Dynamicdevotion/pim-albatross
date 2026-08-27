@@ -4,10 +4,12 @@ namespace Modules\Products\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Localization\Enums\Locale;
 use Modules\Localization\Models\ProductTranslation;
 use Modules\Products\Database\Factories\ProductFactory;
+use Modules\Taxonomies\Models\TaxonomyTerm;
 
 class Product extends Model
 {
@@ -28,6 +30,14 @@ class Product extends Model
     public function translations(): HasMany
     {
         return $this->hasMany(ProductTranslation::class);
+    }
+
+    /**
+     * Taxonomy terms assigned to this product (across any taxonomy).
+     */
+    public function taxonomyTerms(): BelongsToMany
+    {
+        return $this->belongsToMany(TaxonomyTerm::class, 'product_taxonomy_term');
     }
 
     /**

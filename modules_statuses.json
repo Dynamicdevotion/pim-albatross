@@ -1,4 +1,5 @@
 {
     "Products": true,
-    "Localization": true
+    "Localization": true,
+    "Taxonomies": true
 }

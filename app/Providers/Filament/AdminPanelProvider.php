@@ -19,6 +19,7 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Modules\Products\Filament\ProductsPanelPlugin;
+use Modules\Taxonomies\Filament\TaxonomiesPanelPlugin;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -43,6 +44,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->plugins([
                 ProductsPanelPlugin::make(),
+                TaxonomiesPanelPlugin::make(),
             ])
             ->middleware([
                 EncryptCookies::class,
