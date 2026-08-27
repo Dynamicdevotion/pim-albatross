@@ -1,0 +1,11 @@
+{
+    "name": "SavedViews",
+    "alias": "savedviews",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\SavedViews\\Providers\\SavedViewsServiceProvider"
+    ],
+    "files": []
+}
