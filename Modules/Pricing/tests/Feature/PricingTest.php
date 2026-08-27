@@ -344,4 +344,36 @@ class PricingTest extends TestCase
 
         $this->assertSame(['MGL-BLU'], collect($page->rows())->pluck('sku')->all());
     }
+
+    public function test_a_new_price_repeater_row_defaults_to_the_default_price_list(): void
+    {
+        $standard = PriceList::create(['name' => 'Standard', 'is_default' => true]);
+        PriceList::create(['name' => 'Wholesale']);
+
+        $component = Livewire::test(CreateProduct::class)
+            ->fillForm([
+                'sku' => 'DFLT-1',
+                'status' => 'draft',
+                'translations' => ['it' => ['name' => 'Con prezzo']],
+            ])
+            ->callFormComponentAction('prices', 'add');
+
+        $rows = $component->get('data.prices');
+        $key = array_key_first($rows);
+
+        // The reported bug: the row showed "Standard" but price_list_id was null.
+        $this->assertNotNull($rows[$key]['price_list_id']);
+        $this->assertEquals($standard->id, $rows[$key]['price_list_id']);
+
+        $component->set("data.prices.{$key}.price", '50')
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $product = Product::query()->where('sku', 'DFLT-1')->sole();
+        $this->assertDatabaseHas('product_prices', [
+            'product_id' => $product->id,
+            'price_list_id' => $standard->id,
+            'price' => 50.00,
+        ]);
+    }
 }

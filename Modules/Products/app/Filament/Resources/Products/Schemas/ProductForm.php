@@ -87,11 +87,14 @@ class ProductForm
                     ->schema([
                         Select::make('price_list_id')
                             ->label(__('pim.field.price_list'))
+                            ->native(false)
                             ->options(fn (): array => PriceList::query()
                                 ->orderByDesc('is_default')
                                 ->orderBy('name')
                                 ->pluck('name', 'id')
                                 ->all())
+                            ->default(fn (): ?int => PriceList::query()->where('is_default', true)->value('id')
+                                ?? PriceList::query()->value('id'))
                             ->required()
                             ->distinct()
                             ->selectablePlaceholder(false),
