@@ -145,7 +145,7 @@ class ManagePrices extends Page implements HasTable
             ->paginated([25, 50, 100]);
     }
 
-    protected function writePrice(int $productId, mixed $state): void
+    public function writePrice(int $productId, mixed $state): void
     {
         $state = ($state === '' || $state === null) ? null : round((float) $state, 2);
 

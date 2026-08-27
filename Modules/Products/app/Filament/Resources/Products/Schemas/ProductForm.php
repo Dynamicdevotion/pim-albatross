@@ -2,6 +2,7 @@
 
 namespace Modules\Products\Filament\Resources\Products\Schemas;
 
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -10,6 +11,7 @@ use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Localization\Models\Language;
 use Modules\Localization\Support\Locales;
+use Modules\Pricing\Models\PriceList;
 use Modules\Taxonomies\Models\TaxonomyTerm;
 
 class ProductForm
@@ -48,6 +50,34 @@ class ProductForm
                     ->searchable()
                     ->getOptionLabelFromRecordUsing(fn (TaxonomyTerm $record): string =>
                         "{$record->taxonomy->name}: {$record->name}")
+                    ->columnSpanFull(),
+                Repeater::make('prices')
+                    ->label('Prices')
+                    ->relationship()
+                    ->columns(2)
+                    ->schema([
+                        Select::make('price_list_id')
+                            ->label('Price list')
+                            ->options(fn (): array => PriceList::query()
+                                ->orderByDesc('is_default')
+                                ->orderBy('name')
+                                ->pluck('name', 'id')
+                                ->all())
+                            ->required()
+                            ->distinct()
+                            ->selectablePlaceholder(false),
+                        TextInput::make('price')
+                            ->numeric()
+                            ->minValue(0)
+                            ->required()
+                            ->extraInputAttributes(['step' => '0.01']),
+                    ])
+                    ->itemLabel(fn (array $state): ?string => filled($state['price_list_id'] ?? null)
+                        ? PriceList::find($state['price_list_id'])?->name.' — '.($state['price'] ?? '?')
+                        : null)
+                    ->addActionLabel('Add a price')
+                    ->reorderable(false)
+                    ->defaultItems(0)
                     ->columnSpanFull(),
                 Tabs::make('translations')
                     ->columnSpanFull()
