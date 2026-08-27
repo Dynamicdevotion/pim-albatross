@@ -317,6 +317,51 @@ $product->taxonomyTerms();        // BelongsToMany, via product_taxonomy_term
 
 ---
 
+## Pricing module
+
+Multiple price lists, one price per product per list, and a bulk editing screen.
+
+### Tables
+
+| Table | Columns | Notes |
+|---|---|---|
+| `price_lists` | `id`, `name`, `is_default` (bool), `active` (bool) | exactly one default at all times |
+| `product_prices` | `product_id` (FK, cascade), `price_list_id` (FK, cascade), `price` `decimal(10,2)` | unique `(product_id, price_list_id)` |
+
+**Single default** (same pattern as `is_base` on languages): `PriceList`'s
+`saving` hook demotes any previous default (and forces the new one active); the
+`deleting` hook throws for the default. In the panel `is_default` is not a form
+field — a **"Set as default"** row action flips it, the `active` toggle is
+disabled for the default row and Delete is hidden for it.
+
+### Model API
+
+```php
+$list->prices;            // HasMany<ProductPrice>
+$list->products;          // BelongsToMany<Product> withPivot('price')
+PriceList::default();     // ?PriceList
+$product->prices;         // HasMany<ProductPrice>
+```
+
+### Admin
+
+- **`PriceListResource`** (`/admin/price-lists`, "Pricing" nav group) — CRUD for
+  name + active. On **create**, an optional *"Populate prices from another list"*
+  section copies every price from a source list applying a signed percentage
+  (`round(price * (1 + pct/100), 2)`), handled in `HandlesPricePopulation`.
+- **`ManagePrices`** page (`/admin/prices`, "Bulk price editing") — a live
+  price-list `<select>` above a table of **every product** with an
+  inline-editable `Price` column (writing `updateOrCreate`s the `product_prices`
+  row, clearing it deletes it), a *with price / without price* filter and a
+  *Set price* bulk action.
+- The **Products** form has a *Prices* `Repeater` on the `prices` relationship
+  (price-list select `->distinct()` + price) for quick per-list edits from the
+  product card.
+
+`PricingSeeder` creates a `Standard` default list (idempotent).
+
+---
+
 ## Working with modules
 
 ```bash
