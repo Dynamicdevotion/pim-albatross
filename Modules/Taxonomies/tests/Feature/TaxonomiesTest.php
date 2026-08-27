@@ -10,6 +10,7 @@ use Modules\Products\Filament\Resources\Products\Pages\CreateProduct;
 use Modules\Products\Models\Product;
 use Modules\Taxonomies\Filament\Resources\Taxonomies\Pages\CreateTaxonomy;
 use Modules\Taxonomies\Filament\Resources\Taxonomies\Pages\EditTaxonomy;
+use Modules\Taxonomies\Database\Seeders\TaxonomySeeder;
 use Modules\Taxonomies\Filament\Resources\Taxonomies\RelationManagers\TermsRelationManager;
 use Modules\Taxonomies\Models\Taxonomy;
 use Modules\Taxonomies\Models\TaxonomyTerm;
@@ -139,5 +140,28 @@ class TaxonomiesTest extends TestCase
             $product->taxonomyTerms->pluck('id')->all(),
         );
         $this->assertDatabaseCount('product_taxonomy_term', 2);
+    }
+
+    public function test_example_seeder_creates_taxonomies_with_a_hierarchy_and_is_idempotent(): void
+    {
+        (new TaxonomySeeder())->run();
+
+        $this->assertEqualsCanonicalizing(
+            ['categoria', 'colore', 'taglia', 'materiale'],
+            Taxonomy::pluck('slug')->all(),
+        );
+
+        $categoria = Taxonomy::where('slug', 'categoria')->sole();
+        $abbigliamento = $categoria->terms()->where('slug', 'abbigliamento')->sole();
+        $this->assertNull($abbigliamento->parent_id);
+        $this->assertEqualsCanonicalizing(
+            ['Magliette', 'Pantaloni', 'Giacche'],
+            $abbigliamento->children->pluck('name')->all(),
+        );
+
+        $before = TaxonomyTerm::count();
+        (new TaxonomySeeder())->run();
+        $this->assertSame($before, TaxonomyTerm::count());
+        $this->assertCount(4, Taxonomy::all());
     }
 }

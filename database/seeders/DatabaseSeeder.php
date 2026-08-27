@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Modules\Localization\Database\Seeders\LocalizationDatabaseSeeder;
+use Modules\Taxonomies\Database\Seeders\TaxonomiesDatabaseSeeder;
 
 class DatabaseSeeder extends Seeder
 {
@@ -24,6 +25,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call([
+            TaxonomiesDatabaseSeeder::class,
             LocalizationDatabaseSeeder::class,
         ]);
     }
