@@ -28,3 +28,5 @@ Thumbs.db
 .env.save
 error_log
 *.bak
+*.bak.*
+*-backup-*
