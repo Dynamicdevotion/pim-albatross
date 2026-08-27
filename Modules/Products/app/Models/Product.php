@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Localization\Enums\Locale;
 use Modules\Localization\Models\ProductTranslation;
-// use Modules\Products\Database\Factories\ProductFactory;
+use Modules\Products\Database\Factories\ProductFactory;
 
 class Product extends Model
 {
@@ -44,8 +44,8 @@ class Product extends Model
             : $this->translations()->where('locale', $value)->first();
     }
 
-    // protected static function newFactory(): ProductFactory
-    // {
-    //     // return ProductFactory::new();
-    // }
+    protected static function newFactory(): ProductFactory
+    {
+        return ProductFactory::new();
+    }
 }

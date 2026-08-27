@@ -6,7 +6,9 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Modules\Localization\Database\Seeders\ProductTranslationSeeder;
 use Modules\Localization\Enums\Locale;
+use Modules\Localization\Models\ProductTranslation;
 use Modules\Products\Filament\Resources\Products\Pages\CreateProduct;
 use Modules\Products\Filament\Resources\Products\Pages\EditProduct;
 use Modules\Products\Models\Product;
@@ -99,5 +101,34 @@ class ProductTranslationsTest extends TestCase
 
         $this->assertSame('Tavolo XL', $product->translate('it')->name);
         $this->assertNull($product->translate('en'));
+    }
+
+    public function test_factory_builds_a_valid_translation_for_a_given_locale(): void
+    {
+        $translation = ProductTranslation::factory()
+            ->forLocale(Locale::English)
+            ->create();
+
+        $this->assertDatabaseHas('product_translations', [
+            'id' => $translation->id,
+            'locale' => 'en',
+        ]);
+        $this->assertInstanceOf(Product::class, $translation->product);
+        $this->assertNotEmpty($translation->name);
+
+        $this->assertNull(
+            ProductTranslation::factory()->withoutDescription()->create()->description,
+        );
+    }
+
+    public function test_seeder_translates_every_product_and_is_idempotent(): void
+    {
+        Product::factory()->count(3)->create();
+
+        (new ProductTranslationSeeder())->run();
+        $this->assertDatabaseCount('product_translations', 6); // 3 products x (it, en)
+
+        (new ProductTranslationSeeder())->run();
+        $this->assertDatabaseCount('product_translations', 6); // no duplicates on re-run
     }
 }
