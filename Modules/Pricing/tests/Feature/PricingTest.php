@@ -15,6 +15,7 @@ use Modules\Pricing\Filament\Resources\PriceLists\Pages\ListPriceLists;
 use Modules\Pricing\Models\PriceList;
 use Modules\Pricing\Models\ProductPrice;
 use Modules\Products\Filament\Resources\Products\Pages\CreateProduct;
+use Modules\Products\Filament\Resources\Products\Pages\EditProduct;
 use Modules\Products\Models\Product;
 use Modules\Taxonomies\Models\Taxonomy;
 use RuntimeException;
@@ -236,29 +237,70 @@ class PricingTest extends TestCase
             ->assertSet('visibleColumns', ['name', 'sku']);
     }
 
-    public function test_product_form_repeater_writes_per_list_prices(): void
+    public function test_product_form_writes_a_price_per_list_and_skips_the_blank_ones(): void
     {
         $a = PriceList::create(['name' => 'A', 'is_default' => true]);
         $b = PriceList::create(['name' => 'B']);
+        $c = PriceList::create(['name' => 'C']);
 
-        Livewire::test(CreateProduct::class)
+        $component = Livewire::test(CreateProduct::class)
             ->fillForm([
                 'sku' => 'PR-FORM',
                 'status' => 'draft',
                 'translations' => ['it' => ['name' => 'Prezzato']],
-                'prices' => [
-                    ['price_list_id' => $a->id, 'price' => '11.00'],
-                    ['price_list_id' => $b->id, 'price' => '9.50'],
-                ],
-            ])
-            ->call('create')
-            ->assertHasNoFormErrors();
+            ]);
+
+        $rows = $component->get('data.prices');
+        $this->assertCount(3, $rows); // one fixed row per active list, seeded empty
+
+        foreach ($rows as $key => $row) {
+            $component->set("data.prices.{$key}.price", match ($row['price_list_label']) {
+                'A' => '11.00',
+                'B' => '9.50',
+                default => '', // C left blank => no row
+            });
+        }
+
+        $component->call('create')->assertHasNoFormErrors();
 
         $product = Product::query()->where('sku', 'PR-FORM')->sole();
-        $this->assertEqualsCanonicalizing(
-            [$a->id, $b->id],
-            $product->prices->pluck('price_list_id')->all(),
-        );
+        $this->assertEqualsCanonicalizing([$a->id, $b->id], $product->prices->pluck('price_list_id')->all());
+        $this->assertSame('11.00', (string) $product->prices->firstWhere('price_list_id', $a->id)->price);
+    }
+
+    public function test_product_form_edits_prices_creating_updating_and_clearing(): void
+    {
+        $a = PriceList::create(['name' => 'A', 'is_default' => true]);
+        $b = PriceList::create(['name' => 'B']);
+        $c = PriceList::create(['name' => 'C']);
+
+        $product = $this->product('X', 'EDIT-PX');
+        $product->prices()->create(['price_list_id' => $a->id, 'price' => 20]); // will be cleared
+        $product->prices()->create(['price_list_id' => $c->id, 'price' => 5]);  // will be updated
+
+        $component = Livewire::test(EditProduct::class, ['record' => $product->getRouteKey()]);
+
+        $rows = $component->get('data.prices');
+        $byLabel = collect($rows)->keyBy('price_list_label');
+        $this->assertEquals(20.0, (float) $byLabel['A']['price']);
+        $this->assertNull($byLabel['B']['price']);
+        $this->assertEquals(5.0, (float) $byLabel['C']['price']);
+
+        foreach ($rows as $key => $row) {
+            $component->set("data.prices.{$key}.price", match ($row['price_list_label']) {
+                'A' => '',    // clear an existing price -> delete the row
+                'B' => '15',  // add a new one
+                'C' => '7',   // update
+                default => $row['price'],
+            });
+        }
+
+        $component->call('save')->assertHasNoFormErrors();
+
+        $this->assertDatabaseMissing('product_prices', ['product_id' => $product->id, 'price_list_id' => $a->id]);
+        $this->assertDatabaseHas('product_prices', ['product_id' => $product->id, 'price_list_id' => $b->id, 'price' => 15.00]);
+        $this->assertDatabaseHas('product_prices', ['product_id' => $product->id, 'price_list_id' => $c->id, 'price' => 7.00]);
+        $this->assertSame(2, $product->prices()->count());
     }
 
     public function test_example_price_seeder_prices_every_product_and_is_idempotent(): void
@@ -345,35 +387,4 @@ class PricingTest extends TestCase
         $this->assertSame(['MGL-BLU'], collect($page->rows())->pluck('sku')->all());
     }
 
-    public function test_a_new_price_repeater_row_defaults_to_the_default_price_list(): void
-    {
-        $standard = PriceList::create(['name' => 'Standard', 'is_default' => true]);
-        PriceList::create(['name' => 'Wholesale']);
-
-        $component = Livewire::test(CreateProduct::class)
-            ->fillForm([
-                'sku' => 'DFLT-1',
-                'status' => 'draft',
-                'translations' => ['it' => ['name' => 'Con prezzo']],
-            ])
-            ->callFormComponentAction('prices', 'add');
-
-        $rows = $component->get('data.prices');
-        $key = array_key_first($rows);
-
-        // The reported bug: the row showed "Standard" but price_list_id was null.
-        $this->assertNotNull($rows[$key]['price_list_id']);
-        $this->assertEquals($standard->id, $rows[$key]['price_list_id']);
-
-        $component->set("data.prices.{$key}.price", '50')
-            ->call('create')
-            ->assertHasNoFormErrors();
-
-        $product = Product::query()->where('sku', 'DFLT-1')->sole();
-        $this->assertDatabaseHas('product_prices', [
-            'product_id' => $product->id,
-            'price_list_id' => $standard->id,
-            'price' => 50.00,
-        ]);
-    }
 }

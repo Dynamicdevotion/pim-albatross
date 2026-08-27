@@ -31,15 +31,16 @@ class ProductPriceMatrix
 
     /**
      * The fixed-row editor state: one row per active price list, carrying the
-     * product's current price in that list or null when it has none.
+     * product's current price in that list or null when it has none. Passing no
+     * product (or an unsaved one) yields every row empty — the create-form seed.
      *
      * @return list<array{price_list_id: int, price_list_label: string, price: string|null}>
      */
-    public static function readItems(Product $product): array
+    public static function readItems(?Product $product = null): array
     {
-        $prices = $product->relationLoaded('prices')
-            ? $product->prices
-            : $product->prices()->get();
+        $prices = ($product && $product->exists)
+            ? ($product->relationLoaded('prices') ? $product->prices : $product->prices()->get())
+            : collect();
 
         return static::activeLists()
             ->map(fn (PriceList $list): array => [

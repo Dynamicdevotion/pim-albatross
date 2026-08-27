@@ -6,11 +6,13 @@ use Filament\Actions\DeleteAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Modules\Products\Enums\ProductType;
+use Modules\Products\Filament\Resources\Products\Concerns\HandlesProductPrices;
 use Modules\Products\Filament\Resources\Products\Concerns\HandlesProductTranslations;
 use Modules\Products\Filament\Resources\Products\ProductResource;
 
 class EditProduct extends EditRecord
 {
+    use HandlesProductPrices;
     use HandlesProductTranslations;
 
     protected static string $resource = ProductResource::class;
@@ -24,19 +26,20 @@ class EditProduct extends EditRecord
 
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        return $this->fillTranslations($data);
+        return $this->fillPrices($this->fillTranslations($data));
     }
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
         $this->guardTypeChange($data);
 
-        return $this->extractTranslations($data);
+        return $this->extractPrices($this->extractTranslations($data));
     }
 
     protected function afterSave(): void
     {
         $this->saveTranslations();
+        $this->savePrices();
     }
 
     /**

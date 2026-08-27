@@ -2,7 +2,9 @@
 
 namespace Modules\Products\Filament\Resources\Products\Schemas;
 
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -12,7 +14,7 @@ use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Localization\Models\Language;
 use Modules\Localization\Support\Locales;
-use Modules\Pricing\Models\PriceList;
+use Modules\Pricing\Support\ProductPriceMatrix;
 use Modules\Products\Enums\ProductType;
 use Modules\Products\Models\Product;
 use Modules\Taxonomies\Models\TaxonomyTerm;
@@ -79,39 +81,7 @@ class ProductForm
                     ->getOptionLabelFromRecordUsing(fn (TaxonomyTerm $record): string =>
                         "{$record->taxonomy->name}: {$record->name}")
                     ->columnSpanFull(),
-                Repeater::make('prices')
-                    ->label(__('pim.field.prices'))
-                    ->relationship()
-                    ->visible(fn (Get $get): bool => $get('type') !== ProductType::Variable->value)
-                    ->columns(2)
-                    ->schema([
-                        Select::make('price_list_id')
-                            ->label(__('pim.field.price_list'))
-                            ->native(false)
-                            ->options(fn (): array => PriceList::query()
-                                ->orderByDesc('is_default')
-                                ->orderBy('name')
-                                ->pluck('name', 'id')
-                                ->all())
-                            ->default(fn (): ?int => PriceList::query()->where('is_default', true)->value('id')
-                                ?? PriceList::query()->value('id'))
-                            ->required()
-                            ->distinct()
-                            ->selectablePlaceholder(false),
-                        TextInput::make('price')
-                            ->label(__('pim.field.price'))
-                            ->numeric()
-                            ->minValue(0)
-                            ->required()
-                            ->extraInputAttributes(['step' => '0.01']),
-                    ])
-                    ->itemLabel(fn (array $state): ?string => filled($state['price_list_id'] ?? null)
-                        ? PriceList::find($state['price_list_id'])?->name.' — '.($state['price'] ?? '?')
-                        : null)
-                    ->addActionLabel(__('pim.action.add_price'))
-                    ->reorderable(false)
-                    ->defaultItems(0)
-                    ->columnSpanFull(),
+                self::pricesTable(),
                 Tabs::make('translations')
                     ->columnSpanFull()
                     ->tabs(fn (): array => Locales::active()
@@ -127,5 +97,39 @@ class ProductForm
                         ]))
                         ->all()),
             ]);
+    }
+
+    /**
+     * A fixed row per active price list; only the price is editable. A blank
+     * price means "no price on that list" — see ProductPriceMatrix.
+     */
+    public static function pricesTable(): Repeater
+    {
+        return Repeater::make('prices')
+            ->label(__('pim.field.prices'))
+            ->visible(fn (Get $get): bool => $get('type') !== ProductType::Variable->value)
+            ->addable(false)
+            ->deletable(false)
+            ->reorderable(false)
+            ->table([
+                TableColumn::make(__('pim.field.price_list')),
+                TableColumn::make(__('pim.field.price')),
+            ])
+            ->schema([
+                Hidden::make('price_list_id'),
+                TextInput::make('price_list_label')
+                    ->hiddenLabel()
+                    ->disabled()
+                    ->dehydrated(false),
+                TextInput::make('price')
+                    ->hiddenLabel()
+                    ->numeric()
+                    ->minValue(0)
+                    ->maxValue(99999999.99)
+                    ->extraInputAttributes(['step' => '0.01'])
+                    ->placeholder('—'),
+            ])
+            ->default(fn (): array => ProductPriceMatrix::readItems())
+            ->columnSpanFull();
     }
 }
