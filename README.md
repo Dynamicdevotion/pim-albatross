@@ -207,60 +207,67 @@ All behind auth; unauthenticated requests redirect to `/admin/login`.
 
 ## Localization module
 
-Multilingual product content (`name`, `description`), **independent from
-`APP_LOCALE`** (which only sets the admin UI language). Translations live in a
-satellite table, one row per `(product_id, locale)`, with **no automatic
-fallback** — a missing row shows as empty.
+Multilingual content, **independent from `APP_LOCALE`** (which only sets the
+admin UI language). Which languages exist is **panel-managed data**, not a
+static list. Translations live in satellite tables keyed by `language_id`, with
+**no automatic fallback** — a missing row shows as empty.
 
-### Supported locales — single source of truth
+### `languages` table
 
-`Modules/Localization/app/Enums/Locale.php`:
+| Column | Notes |
+|---|---|
+| `code` | ISO 639-1, unique (`it`, `en`, …) |
+| `name` | display name |
+| `active` | offered for editing in the panel |
+| `is_base` | exactly one row; the required language and slug/migration source |
 
-| Code | Language | |
-|---|---|---|
-| `it` | Italiano | base / default |
-| `en` | English | |
-| `es` | Español | |
-| `fr` | Français | |
-| `de` | Deutsch | |
+`create_languages_table` also inserts a ~20-language catalogue
+(`Support/LanguageCatalog`, shared with `LanguageSeeder`); `it/en/es/fr/de` start
+active, `it` is base.
 
-`Locale::default()` → `it`, `Locale::values()` → the code list. Migration, model,
-Filament form and table all iterate `Locale::cases()` — languages are never
-hardcoded elsewhere.
+**`Modules\Localization\Support\Locales`** is the read facade (replaces the old
+`Locale` enum): `active()`, `activeCodes()`, `base()` / `baseCode()`, and
+`idFor($code)` / `codeFor($id)` bridging the code used in form state and the
+`language_id` stored in the DB.
 
-### `product_translations` table
+### Translation tables
 
-| Column | Type | Notes |
-|---|---|---|
-| `id` | bigint | PK |
-| `product_id` | bigint | FK → `products`, cascade on delete |
-| `locale` | string(5) | |
-| `name` | string | required — a row exists only if it has a name |
-| `description` | text | nullable; stores RichEditor HTML |
-| `created_at` / `updated_at` | timestamp | |
+`product_translations` (`Products`), `taxonomy_translations` &
+`taxonomy_term_translations` (`Taxonomies`) all share the shape:
 
-Unique on `(product_id, locale)`.
+| Column | Notes |
+|---|---|
+| `<parent>_id` | FK, cascade on delete |
+| `language_id` | FK → `languages`, cascade on delete |
+| `name` | required — a row exists only if it has a name |
+| `description` | `product_translations` only; nullable RichEditor HTML |
 
-### Model API
-
-`Modules\Localization\Models\ProductTranslation` — `belongsTo(Product)`.
-`Product` (Products module) gains:
+Unique on `(<parent>_id, language_id)`. The translation models keep an ergonomic
+`locale` attribute (read/write by code) over `language_id`.
 
 ```php
-$product->translations;               // HasMany<ProductTranslation>
-$product->translate('en');            // ?ProductTranslation, null if absent (no fallback)
-$product->translate(Locale::German);  // the enum works too
+$product->translations;              // HasMany
+$product->translate('en');           // ?Translation, null if absent (no fallback)
+$taxonomy->name;                     // read-only accessor → base-language name
 ```
+
+### `LanguageResource` (`/admin/languages`)
+
+List with an `active` **ToggleColumn** (disabled for the base language and for
+any language that already has content). A **"Deactivate…"** row action handles
+the content case: it asks *keep the rows hidden* (they reappear when the
+language is re-activated — the tab-per-language forms only render **active**
+languages) vs *delete every translation in this language*
+(`Support/LanguageContent::purge`, across all three tables).
 
 ### Editing translations
 
-No dedicated Filament resource. The **Products** create/edit form has a `Tabs`
-block with one tab per locale (`name` + `description` RichEditor, base-locale
-name required). Load/save is handled by `HandlesProductTranslations`
-(`Modules/Products/app/Filament/Resources/Products/Concerns/`): rows are written
-to `product_translations` in `afterCreate` / `afterSave`, and a locale left
-without a name is pruned. The products list shows the base-locale name in its
-first column.
+No dedicated resource for the translations themselves. Each translatable form
+(`ProductForm`, `TaxonomyForm`, the Terms relation manager) renders a `Tabs`
+block built from `Locales::active()` — one tab per active language, base-language
+name required. Save/prune runs in the page's `afterCreate` / `afterSave` hooks
+(`HandlesProductTranslations`, `HandlesTranslatableName`), keyed by `language_id`
+and touching only active languages.
 
 ---
 
@@ -274,17 +281,21 @@ carry many terms — from any number of taxonomies.
 
 | Table | Columns | Notes |
 |---|---|---|
-| `taxonomies` | `id`, `name`, `slug` (unique), timestamps | the classification types |
-| `taxonomy_terms` | `id`, `taxonomy_id` (FK, cascade), `parent_id` (FK → `taxonomy_terms`, nullable, **nullOnDelete**), `name`, `slug`, timestamps | unique `(taxonomy_id, slug)`; deleting a parent term promotes its children to roots |
+| `taxonomies` | `id`, `slug` (unique), timestamps | the classification types; **name is translated** |
+| `taxonomy_terms` | `id`, `taxonomy_id` (FK, cascade), `parent_id` (FK → `taxonomy_terms`, nullable, **nullOnDelete**), `slug`, timestamps | unique `(taxonomy_id, slug)`; deleting a parent term promotes its children to roots; **name is translated** |
+| `taxonomy_translations` / `taxonomy_term_translations` | `<parent>_id` (FK, cascade), `language_id` (FK, cascade), `name` | see *Localization module*; unique `(<parent>_id, language_id)` |
 | `product_taxonomy_term` | `product_id` (FK, cascade), `taxonomy_term_id` (FK, cascade) | m2m pivot, unique pair |
 
-`slug` is filled from `name` on save (unique globally for a taxonomy, per-taxonomy
-for a term) via `Modules\Taxonomies\Models\Concerns\HasGeneratedSlug`.
+`slug` is set explicitly (form / factory / seeder). When left blank in the panel
+it is derived from the base-language name by `HandlesTranslatableName` — unique
+globally for a taxonomy, per-taxonomy for a term.
 
 ### Model API
 
 ```php
 $taxonomy->terms;                 // HasMany<TaxonomyTerm>
+$taxonomy->name;                  // read-only accessor → base-language name
+$taxonomy->translate('en');       // ?TaxonomyTranslation
 $term->taxonomy;                  // BelongsTo<Taxonomy>
 $term->parent; $term->children;   // self-referencing hierarchy
 $term->products;                  // BelongsToMany<Product>
@@ -294,11 +305,12 @@ $product->taxonomyTerms();        // BelongsToMany, via product_taxonomy_term
 
 ### Admin
 
-- **`TaxonomyResource`** (`/admin/taxonomies`) — CRUD for the taxonomies
-  themselves (name, slug).
+- **`TaxonomyResource`** (`/admin/taxonomies`) — CRUD; the name is edited through
+  the tab-per-active-language block, `slug` alongside.
 - Opening a taxonomy shows a **Terms** relation manager: a table of its terms
-  (name, parent, slug, children count) with a form whose **Parent** select is
-  limited to that taxonomy and excludes the term itself and its descendants.
+  (name, parent, slug, children count) with a form (name tabs + `slug` +
+  **Parent** select limited to that taxonomy, excluding the term itself and its
+  descendants).
 - The **Products** form has a multiple *Taxonomy terms* select (`relationship()`
   mode → the pivot syncs automatically); options and the products-list *Terms*
   column read as `"Taxonomy: Term"`.
