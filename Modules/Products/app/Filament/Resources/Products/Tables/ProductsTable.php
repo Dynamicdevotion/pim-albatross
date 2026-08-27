@@ -27,6 +27,23 @@ class ProductsTable
                         fn ($q) => $q->where('locale', Locale::default()->value)
                             ->where('name', 'like', "%{$search}%"),
                     )),
+                TextColumn::make('translated_locales')
+                    ->label('Translations')
+                    ->badge()
+                    ->getStateUsing(function (Product $record): array {
+                        $order = Locale::values();
+
+                        return $record->translations
+                            ->pluck('locale')
+                            ->unique()
+                            ->sortBy(fn (string $locale): int => (int) array_search($locale, $order, true))
+                            ->map(fn (string $locale): string => strtoupper($locale))
+                            ->values()
+                            ->all();
+                    })
+                    ->color(fn (string $state): string => $state === strtoupper(Locale::default()->value) ? 'primary' : 'gray')
+                    ->placeholder('—')
+                    ->tooltip('Locales this product has content for'),
                 TextColumn::make('sku')
                     ->label('SKU')
                     ->searchable()
@@ -59,6 +76,19 @@ class ProductsTable
                         'active' => 'Active',
                         'archived' => 'Archived',
                     ]),
+                SelectFilter::make('missing_translation')
+                    ->label('Missing translation')
+                    ->options(
+                        collect(Locale::cases())
+                            ->mapWithKeys(fn (Locale $locale): array => [$locale->value => $locale->label()])
+                            ->all(),
+                    )
+                    ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
+                        ? $query->whereDoesntHave(
+                            'translations',
+                            fn (Builder $relation): Builder => $relation->where('locale', $data['value']),
+                        )
+                        : $query),
             ])
             ->recordActions([
                 EditAction::make(),

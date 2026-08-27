@@ -347,3 +347,9 @@ php artisan make:filament-user
 composer test                       # config:clear + artisan test
 ./vendor/bin/pint                   # code style
 ```
+
+> **Tests + cached config:** `php artisan test` reads the DB connection from
+> `phpunit.xml` (`sqlite` `:memory:`), but a cached `bootstrap/cache/config.php`
+> overrides it and the suite then runs against the **real** database. Always
+> `php artisan config:clear` (or use `composer test`, which does it for you)
+> before running tests on the server, then `php artisan optimize` afterwards.

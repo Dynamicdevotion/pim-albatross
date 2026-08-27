@@ -11,6 +11,7 @@ use Modules\Localization\Enums\Locale;
 use Modules\Localization\Models\ProductTranslation;
 use Modules\Products\Filament\Resources\Products\Pages\CreateProduct;
 use Modules\Products\Filament\Resources\Products\Pages\EditProduct;
+use Modules\Products\Filament\Resources\Products\Pages\ListProducts;
 use Modules\Products\Models\Product;
 use Tests\TestCase;
 
@@ -130,5 +131,23 @@ class ProductTranslationsTest extends TestCase
 
         (new ProductTranslationSeeder())->run();
         $this->assertDatabaseCount('product_translations', 6); // no duplicates on re-run
+    }
+
+    public function test_product_list_reports_translated_locales_and_filters_by_missing_one(): void
+    {
+        $itEn = Product::factory()->create();
+        $itEn->translations()->create(['locale' => 'it', 'name' => 'A']);
+        $itEn->translations()->create(['locale' => 'en', 'name' => 'A EN']);
+
+        $itOnly = Product::factory()->create();
+        $itOnly->translations()->create(['locale' => 'it', 'name' => 'B']);
+
+        Livewire::test(ListProducts::class)
+            ->assertCanSeeTableRecords([$itEn, $itOnly])
+            ->assertTableColumnStateSet('translated_locales', ['IT', 'EN'], record: $itEn)
+            ->assertTableColumnStateSet('translated_locales', ['IT'], record: $itOnly)
+            ->filterTable('missing_translation', 'en')
+            ->assertCanSeeTableRecords([$itOnly])
+            ->assertCanNotSeeTableRecords([$itEn]);
     }
 }
