@@ -8,6 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Modules\Localization\Database\Seeders\LanguageSeeder;
 use Modules\Pricing\Database\Seeders\PricingSeeder;
+use Modules\Pricing\Database\Seeders\ProductPriceSeeder;
 use Modules\Pricing\Filament\Pages\ManagePrices;
 use Modules\Pricing\Filament\Resources\PriceLists\Pages\CreatePriceList;
 use Modules\Pricing\Filament\Resources\PriceLists\Pages\ListPriceLists;
@@ -179,5 +180,20 @@ class PricingTest extends TestCase
             [$a->id, $b->id],
             $product->prices->pluck('price_list_id')->all(),
         );
+    }
+
+    public function test_example_price_seeder_prices_every_product_and_is_idempotent(): void
+    {
+        $this->product('Uno', 'S-1');
+        $this->product('Due', 'S-2');
+
+        (new ProductPriceSeeder())->run();
+
+        // 2 products x 1 active list (Standard, created by the seeder)
+        $this->assertDatabaseCount('product_prices', 2);
+        Product::all()->each(fn (Product $p) => $this->assertNotNull($p->prices()->first()?->price));
+
+        (new ProductPriceSeeder())->run();
+        $this->assertDatabaseCount('product_prices', 2);
     }
 }

@@ -11,6 +11,9 @@ class PricingDatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call(PricingSeeder::class);
+        $this->call([
+            PricingSeeder::class,
+            ProductPriceSeeder::class,
+        ]);
     }
 }
