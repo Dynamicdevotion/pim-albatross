@@ -18,18 +18,19 @@ class TaxonomyForm
                     ->columnSpanFull()
                     ->tabs(fn (): array => Locales::active()
                         ->map(fn (Language $language): Tabs\Tab => Tabs\Tab::make(
-                            $language->name.($language->is_base ? ' — base' : ''),
+                            $language->name.($language->is_base ? __('pim.field.base_suffix') : ''),
                         )->schema([
                             TextInput::make("translations.{$language->code}.name")
-                                ->label('Name')
+                                ->label(__('pim.field.name'))
                                 ->maxLength(255)
                                 ->required($language->is_base),
                         ]))
                         ->all()),
                 TextInput::make('slug')
+                    ->label(__('pim.field.slug'))
                     ->maxLength(255)
                     ->unique(ignoreRecord: true)
-                    ->helperText('Leave blank to generate it from the base name.'),
+                    ->helperText(__('pim.helper.slug_from_name')),
             ]);
     }
 }

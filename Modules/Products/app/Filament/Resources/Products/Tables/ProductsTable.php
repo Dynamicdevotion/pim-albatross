@@ -30,7 +30,7 @@ class ProductsTable
             ]))
             ->columns([
                 TextColumn::make('name_base')
-                    ->label('Name')
+                    ->label(__('pim.field.name'))
                     ->getStateUsing(fn (Product $record): ?string => $record->translate(Locales::baseCode())?->name)
                     ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas(
                         'translations',
@@ -38,7 +38,7 @@ class ProductsTable
                             ->where('name', 'like', "%{$search}%"),
                     )),
                 TextColumn::make('translated_locales')
-                    ->label('Translations')
+                    ->label(__('pim.field.translations'))
                     ->badge()
                     ->getStateUsing(function (Product $record): array {
                         $order = Locales::activeCodes();
@@ -54,9 +54,9 @@ class ProductsTable
                     })
                     ->color(fn (string $state): string => $state === strtoupper(Locales::baseCode()) ? 'primary' : 'gray')
                     ->placeholder('—')
-                    ->tooltip('Languages this product has content for'),
+                    ->tooltip(__('pim.tooltip.translated_languages')),
                 TextColumn::make('taxonomy_terms')
-                    ->label('Terms')
+                    ->label(__('pim.field.terms'))
                     ->badge()
                     ->getStateUsing(fn (Product $record): array => $record->taxonomyTerms
                         ->sortBy(fn ($term): string => $term->taxonomy->name.$term->name)
@@ -66,14 +66,15 @@ class ProductsTable
                     ->placeholder('—')
                     ->toggleable(),
                 TextColumn::make('sku')
-                    ->label('SKU')
+                    ->label(__('pim.field.sku'))
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('external_id')
-                    ->label('External ID')
+                    ->label(__('pim.field.external_id'))
                     ->searchable()
                     ->toggleable(),
                 TextColumn::make('status')
+                    ->label(__('pim.field.status'))
                     ->badge()
                     ->sortable()
                     ->color(fn (string $state): string => match ($state) {
@@ -92,13 +93,14 @@ class ProductsTable
             ])
             ->filters([
                 SelectFilter::make('status')
+                    ->label(__('pim.field.status'))
                     ->options([
-                        'draft' => 'Draft',
-                        'active' => 'Active',
-                        'archived' => 'Archived',
+                        'draft' => __('pim.option.status.draft'),
+                        'active' => __('pim.option.status.active'),
+                        'archived' => __('pim.option.status.archived'),
                     ]),
                 SelectFilter::make('missing_translation')
-                    ->label('Missing translation')
+                    ->label(__('pim.filter.missing_translation'))
                     ->options(fn (): array => Locales::active()
                         ->mapWithKeys(fn (Language $language): array => [$language->code => $language->name])
                         ->all())
@@ -115,11 +117,11 @@ class ProductsTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     BulkAction::make('assignTaxonomyTerms')
-                        ->label('Assign taxonomy terms')
+                        ->label(__('pim.action.assign_taxonomy_terms'))
                         ->icon('heroicon-o-tag')
                         ->schema([
                             Select::make('terms')
-                                ->label('Terms')
+                                ->label(__('pim.field.terms'))
                                 ->multiple()
                                 ->searchable()
                                 ->required()
@@ -130,7 +132,7 @@ class ProductsTable
                                 ->syncWithoutDetaching($data['terms']));
 
                             Notification::make()
-                                ->title("Terms assigned to {$records->count()} product(s)")
+                                ->title(__('pim.notification.terms_assigned', ['count' => $records->count()]))
                                 ->success()
                                 ->send();
                         })

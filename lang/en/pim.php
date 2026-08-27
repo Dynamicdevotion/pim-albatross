@@ -36,6 +36,7 @@ return [
         'active' => 'Active',
         'default' => 'Default',
         'price' => 'Price',
+        'prices' => 'Prices',
         'price_list' => 'Price list',
         'terms' => 'Terms',
         'taxonomy_terms' => 'Taxonomy terms',

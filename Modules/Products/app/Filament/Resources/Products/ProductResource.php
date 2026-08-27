@@ -22,6 +22,16 @@ class ProductResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'sku';
 
+    public static function getModelLabel(): string
+    {
+        return __('pim.resource.product.label');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('pim.resource.product.plural');
+    }
+
     public static function form(Schema $schema): Schema
     {
         return ProductForm::configure($schema);

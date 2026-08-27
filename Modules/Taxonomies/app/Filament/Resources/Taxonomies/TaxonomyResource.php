@@ -23,6 +23,16 @@ class TaxonomyResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
+    public static function getModelLabel(): string
+    {
+        return __('pim.resource.taxonomy.label');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('pim.resource.taxonomy.plural');
+    }
+
     public static function form(Schema $schema): Schema
     {
         return TaxonomyForm::configure($schema);

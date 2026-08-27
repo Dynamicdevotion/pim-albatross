@@ -36,6 +36,7 @@ return [
         'active' => 'Attiva',
         'default' => 'Predefinito',
         'price' => 'Prezzo',
+        'prices' => 'Prezzi',
         'price_list' => 'Listino',
         'terms' => 'Termini',
         'taxonomy_terms' => 'Termini di tassonomia',

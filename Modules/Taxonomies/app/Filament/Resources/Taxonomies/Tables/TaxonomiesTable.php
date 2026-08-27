@@ -20,17 +20,18 @@ class TaxonomiesTable
                 ->withCount('terms'))
             ->columns([
                 TextColumn::make('name')
-                    ->label('Name')
+                    ->label(__('pim.field.name'))
                     ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas(
                         'translations',
                         fn (Builder $q) => $q->where('language_id', Locales::idFor(Locales::baseCode()))
                             ->where('name', 'like', "%{$search}%"),
                     )),
                 TextColumn::make('slug')
+                    ->label(__('pim.field.slug'))
                     ->searchable()
                     ->toggleable(),
                 TextColumn::make('terms_count')
-                    ->label('Terms')
+                    ->label(__('pim.field.terms'))
                     ->sortable(),
                 TextColumn::make('created_at')
                     ->dateTime()

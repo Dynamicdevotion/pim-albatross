@@ -21,25 +21,26 @@ class ProductForm
         return $schema
             ->components([
                 TextInput::make('sku')
-                    ->label('SKU')
+                    ->label(__('pim.field.sku'))
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true),
                 TextInput::make('external_id')
-                    ->label('External ID')
+                    ->label(__('pim.field.external_id'))
                     ->maxLength(255)
                     ->default(null),
                 Select::make('status')
+                    ->label(__('pim.field.status'))
                     ->required()
                     ->default('draft')
                     ->native(false)
                     ->options([
-                        'draft' => 'Draft',
-                        'active' => 'Active',
-                        'archived' => 'Archived',
+                        'draft' => __('pim.option.status.draft'),
+                        'active' => __('pim.option.status.active'),
+                        'archived' => __('pim.option.status.archived'),
                     ]),
                 Select::make('taxonomyTerms')
-                    ->label('Taxonomy terms')
+                    ->label(__('pim.field.taxonomy_terms'))
                     ->relationship(
                         'taxonomyTerms',
                         'name',
@@ -52,12 +53,12 @@ class ProductForm
                         "{$record->taxonomy->name}: {$record->name}")
                     ->columnSpanFull(),
                 Repeater::make('prices')
-                    ->label('Prices')
+                    ->label(__('pim.field.prices'))
                     ->relationship()
                     ->columns(2)
                     ->schema([
                         Select::make('price_list_id')
-                            ->label('Price list')
+                            ->label(__('pim.field.price_list'))
                             ->options(fn (): array => PriceList::query()
                                 ->orderByDesc('is_default')
                                 ->orderBy('name')
@@ -67,6 +68,7 @@ class ProductForm
                             ->distinct()
                             ->selectablePlaceholder(false),
                         TextInput::make('price')
+                            ->label(__('pim.field.price'))
                             ->numeric()
                             ->minValue(0)
                             ->required()
@@ -75,7 +77,7 @@ class ProductForm
                     ->itemLabel(fn (array $state): ?string => filled($state['price_list_id'] ?? null)
                         ? PriceList::find($state['price_list_id'])?->name.' — '.($state['price'] ?? '?')
                         : null)
-                    ->addActionLabel('Add a price')
+                    ->addActionLabel(__('pim.action.add_price'))
                     ->reorderable(false)
                     ->defaultItems(0)
                     ->columnSpanFull(),
@@ -83,14 +85,14 @@ class ProductForm
                     ->columnSpanFull()
                     ->tabs(fn (): array => Locales::active()
                         ->map(fn (Language $language): Tabs\Tab => Tabs\Tab::make(
-                            $language->name.($language->is_base ? ' — base' : ''),
+                            $language->name.($language->is_base ? __('pim.field.base_suffix') : ''),
                         )->schema([
                             TextInput::make("translations.{$language->code}.name")
-                                ->label('Name')
+                                ->label(__('pim.field.name'))
                                 ->maxLength(255)
                                 ->required($language->is_base),
                             RichEditor::make("translations.{$language->code}.description")
-                                ->label('Description'),
+                                ->label(__('pim.field.description')),
                         ]))
                         ->all()),
             ]);

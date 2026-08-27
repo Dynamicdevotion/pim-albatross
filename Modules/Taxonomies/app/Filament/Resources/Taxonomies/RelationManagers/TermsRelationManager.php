@@ -47,19 +47,20 @@ class TermsRelationManager extends RelationManager
                     ->columnSpanFull()
                     ->tabs(fn (): array => Locales::active()
                         ->map(fn (Language $language): Tabs\Tab => Tabs\Tab::make(
-                            $language->name.($language->is_base ? ' — base' : ''),
+                            $language->name.($language->is_base ? __('pim.field.base_suffix') : ''),
                         )->schema([
                             TextInput::make("translations.{$language->code}.name")
-                                ->label('Name')
+                                ->label(__('pim.field.name'))
                                 ->maxLength(255)
                                 ->required($language->is_base),
                         ]))
                         ->all()),
                 TextInput::make('slug')
+                    ->label(__('pim.field.slug'))
                     ->maxLength(255)
-                    ->helperText('Leave blank to generate it from the base name.'),
+                    ->helperText(__('pim.helper.slug_from_name')),
                 Select::make('parent_id')
-                    ->label('Parent')
+                    ->label(__('pim.field.parent'))
                     ->searchable()
                     ->options(fn (?TaxonomyTerm $record): array => $this->getOwnerRecord()
                         ->terms()
@@ -84,19 +85,20 @@ class TermsRelationManager extends RelationManager
                 ->withCount('children'))
             ->columns([
                 TextColumn::make('name')
-                    ->label('Name')
+                    ->label(__('pim.field.name'))
                     ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas(
                         'translations',
                         fn (Builder $q) => $q->where('language_id', Locales::idFor(Locales::baseCode()))
                             ->where('name', 'like', "%{$search}%"),
                     )),
                 TextColumn::make('parent.name')
-                    ->label('Parent')
+                    ->label(__('pim.field.parent'))
                     ->placeholder('—'),
                 TextColumn::make('slug')
+                    ->label(__('pim.field.slug'))
                     ->toggleable(),
                 TextColumn::make('children_count')
-                    ->label('Children'),
+                    ->label(__('pim.field.children')),
             ])
             ->headerActions([
                 CreateAction::make()
