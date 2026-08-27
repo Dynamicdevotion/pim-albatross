@@ -2,5 +2,6 @@
     "Products": true,
     "Localization": true,
     "Taxonomies": true,
-    "Pricing": true
+    "Pricing": true,
+    "SavedViews": true
 }
