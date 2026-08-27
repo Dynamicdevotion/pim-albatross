@@ -44,6 +44,8 @@ return [
         'price' => 'Price',
         'prices' => 'Prices',
         'price_list' => 'Price list',
+        'price_min' => 'Min price',
+        'price_max' => 'Max price',
         'terms' => 'Terms',
         'taxonomy_terms' => 'Taxonomy terms',
         'translations' => 'Translations',
@@ -77,6 +79,10 @@ return [
             'variants' => 'Variants only',
             'simple' => 'Simple only',
         ],
+        'stock' => [
+            'zero' => 'Out of stock',
+            'low' => 'Low (≤ :threshold)',
+        ],
         'any' => 'Any',
         'none' => '— none —',
     ],
@@ -86,6 +92,8 @@ return [
         'price' => 'Price',
         'type' => 'Type',
         'variant_scope' => 'Variants',
+        'taxonomy_terms' => 'Taxonomy',
+        'price_presence' => 'Price presence',
     ],
 
     'action' => [
