@@ -264,6 +264,47 @@ first column.
 
 ---
 
+## Taxonomies module
+
+User-defined classification systems (e.g. Categoria, Tag, Misure, Colori). Each
+**taxonomy** owns **terms** that can be nested (parent/child), and a product can
+carry many terms — from any number of taxonomies.
+
+### Tables
+
+| Table | Columns | Notes |
+|---|---|---|
+| `taxonomies` | `id`, `name`, `slug` (unique), timestamps | the classification types |
+| `taxonomy_terms` | `id`, `taxonomy_id` (FK, cascade), `parent_id` (FK → `taxonomy_terms`, nullable, **nullOnDelete**), `name`, `slug`, timestamps | unique `(taxonomy_id, slug)`; deleting a parent term promotes its children to roots |
+| `product_taxonomy_term` | `product_id` (FK, cascade), `taxonomy_term_id` (FK, cascade) | m2m pivot, unique pair |
+
+`slug` is filled from `name` on save (unique globally for a taxonomy, per-taxonomy
+for a term) via `Modules\Taxonomies\Models\Concerns\HasGeneratedSlug`.
+
+### Model API
+
+```php
+$taxonomy->terms;                 // HasMany<TaxonomyTerm>
+$term->taxonomy;                  // BelongsTo<Taxonomy>
+$term->parent; $term->children;   // self-referencing hierarchy
+$term->products;                  // BelongsToMany<Product>
+$term->descendantIds();           // list<int> — self excluded, used to keep parent pickers cycle-free
+$product->taxonomyTerms();        // BelongsToMany, via product_taxonomy_term
+```
+
+### Admin
+
+- **`TaxonomyResource`** (`/admin/taxonomies`) — CRUD for the taxonomies
+  themselves (name, slug).
+- Opening a taxonomy shows a **Terms** relation manager: a table of its terms
+  (name, parent, slug, children count) with a form whose **Parent** select is
+  limited to that taxonomy and excludes the term itself and its descendants.
+- The **Products** form has a multiple *Taxonomy terms* select (`relationship()`
+  mode → the pivot syncs automatically); options and the products-list *Terms*
+  column read as `"Taxonomy: Term"`.
+
+---
+
 ## Working with modules
 
 ```bash
