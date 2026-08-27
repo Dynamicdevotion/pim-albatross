@@ -390,6 +390,33 @@ Reusable per-user snapshots of a screen's filters + visible columns.
 
 ---
 
+## Interface localization
+
+The **panel UI** (labels, buttons, notifications) is translatable, separately
+from product content. Two interface languages ship: **Italian and English**,
+`it` is the default (`APP_LOCALE=it`).
+
+- **Custom strings** live in `lang/it/pim.php` and `lang/en/pim.php` under the
+  `pim.*` namespace (`pim.field.*`, `pim.action.*`, `pim.notification.*`, …).
+  Every hardcoded label across the module Filament layers goes through
+  `__('pim.…')`; resource names and the Pricing page title/nav resolve via
+  `getModelLabel()` / `getPluralModelLabel()` / `getNavigationLabel()` /
+  `getNavigationGroup()` / `getTitle()` overrides so they follow the request
+  locale.
+- **Framework strings** (Filament's own "Create", "Save", "Are you sure?",
+  pagination, system notifications) need no package — Filament v4 ships complete
+  `it` translations for all its sub-packages, active whenever
+  `app()->getLocale() === 'it'`.
+- **Switcher**: [`bezhansalleh/filament-language-switch`](https://github.com/bezhanSalleh/filament-language-switch)
+  v5, configured in `AppServiceProvider` (`it`/`en`, native labels). It
+  auto-registers a topbar control and the locale middleware.
+- **Persistence is per user, not per browser session**: the `users.locale`
+  column holds each account's last choice. The switcher reads it as the default
+  (`userPreferredLocale()`), and a `LocaleChanged` listener writes every change
+  back. A fresh login on any device restores the stored preference.
+
+---
+
 ## Working with modules
 
 ```bash
