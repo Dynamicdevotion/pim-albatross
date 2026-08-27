@@ -3,32 +3,31 @@
 namespace Modules\Pricing\Filament\Pages;
 
 use BackedEnum;
-use Filament\Actions\BulkAction;
-use Filament\Actions\BulkActionGroup;
+use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\TextInputColumn;
-use Filament\Tables\Concerns\InteractsWithTable;
-use Filament\Tables\Contracts\HasTable;
-use Filament\Tables\Filters\TernaryFilter;
-use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Modules\Localization\Support\Locales;
 use Modules\Pricing\Models\PriceList;
 use Modules\Pricing\Models\ProductPrice;
+use Modules\Pricing\Support\PriceAdjuster;
 use Modules\Products\Models\Product;
+use Modules\SavedViews\Filament\Concerns\InteractsWithSavedViews;
+use Modules\Taxonomies\Models\Taxonomy;
+use Modules\Taxonomies\Models\TaxonomyTerm;
 
 /**
- * One screen to edit the price of every product in a chosen price list without
- * opening each product. Pick a list at the top; edit prices inline or in bulk.
+ * Excel-like editor for every product's price in one price list. A jspreadsheet
+ * grid (drag select, paste from Excel, drag-fill) sits under a toolbar of
+ * filters, per-user saved views, column toggles and bulk % actions.
  */
-class ManagePrices extends Page implements HasTable
+class ManagePrices extends Page
 {
-    use InteractsWithTable;
+    use InteractsWithSavedViews;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
@@ -44,7 +43,21 @@ class ManagePrices extends Page implements HasTable
 
     protected string $view = 'pricing::filament.pages.manage-prices';
 
+    private const ROW_CAP = 1000;
+
     public ?int $priceListId = null;
+
+    public string $search = '';
+
+    public ?string $hasPrice = null;      // 'yes' | 'no' | null
+
+    public ?int $categoryTermId = null;
+
+    /** @var list<string> */
+    public array $visibleColumns = ['name', 'sku', 'status'];
+
+    /** @var list<int> */
+    public array $selectedProductIds = [];
 
     public static function canAccess(): bool
     {
@@ -55,6 +68,51 @@ class ManagePrices extends Page implements HasTable
     {
         $this->priceListId = PriceList::query()->where('is_default', true)->value('id')
             ?? PriceList::query()->value('id');
+    }
+
+    // ---- saved views contract -------------------------------------------------
+
+    public function savedViewResourceKey(): string
+    {
+        return 'pricing.prices';
+    }
+
+    public function captureViewState(): array
+    {
+        return [
+            'filters' => [
+                'search' => $this->search,
+                'hasPrice' => $this->hasPrice,
+                'categoryTermId' => $this->categoryTermId,
+            ],
+            'columns' => array_values($this->visibleColumns),
+        ];
+    }
+
+    public function applyViewState(array $state): void
+    {
+        $filters = $state['filters'] ?? [];
+        $this->search = (string) ($filters['search'] ?? '');
+        $this->hasPrice = $filters['hasPrice'] ?? null;
+        $this->categoryTermId = isset($filters['categoryTermId']) ? (int) $filters['categoryTermId'] : null;
+        $this->visibleColumns = $state['columns'] ?? ['name', 'sku', 'status'];
+
+        $this->refreshGrid();
+    }
+
+    // ---- reactive toolbar ---------------------------------------------------
+
+    public function updated(string $property): void
+    {
+        if (in_array($property, ['priceListId', 'search', 'hasPrice', 'categoryTermId', 'visibleColumns'], true)) {
+            $this->refreshGrid();
+        }
+    }
+
+    protected function refreshGrid(): void
+    {
+        $this->selectedProductIds = [];
+        $this->dispatch('prices-grid-data', rows: $this->rows(), columns: array_values($this->visibleColumns));
     }
 
     /**
@@ -69,80 +127,102 @@ class ManagePrices extends Page implements HasTable
             ->all();
     }
 
-    public function table(Table $table): Table
+    /**
+     * @return array<string, string>
+     */
+    public function columnCatalogue(): array
     {
-        $listId = $this->priceListId;
+        return ['name' => 'Name', 'sku' => 'SKU', 'status' => 'Status'];
+    }
 
-        return $table
-            ->query(Product::query()->with([
+    /**
+     * @return array<string, string>
+     */
+    public function gridHeaders(): array
+    {
+        return $this->columnCatalogue() + ['price' => 'Price'];
+    }
+
+    /**
+     * @return array<int|string, string>
+     */
+    public function categoryOptions(): array
+    {
+        return Taxonomy::query()
+            ->with(['translations', 'terms.translations'])
+            ->get()
+            ->flatMap(fn (Taxonomy $taxonomy) => $taxonomy->terms->mapWithKeys(
+                fn (TaxonomyTerm $term) => [$term->id => "{$taxonomy->name}: {$term->name}"],
+            ))
+            ->all();
+    }
+
+    public function gridCapped(): bool
+    {
+        return $this->baseQuery()->count() > self::ROW_CAP;
+    }
+
+    /**
+     * @return array<int, array{product_id: int, name: string|null, sku: string, status: string, price: string|null}>
+     */
+    public function rows(): array
+    {
+        return $this->baseQuery()
+            ->with([
                 'translations',
-                'prices' => fn ($query) => $query->where('price_list_id', $listId),
-            ]))
-            ->columns([
-                TextColumn::make('name')
-                    ->label('Name')
-                    ->getStateUsing(fn (Product $record): ?string => $record->translate(Locales::baseCode())?->name)
-                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas(
-                        'translations',
-                        fn (Builder $q) => $q->where('language_id', Locales::idFor(Locales::baseCode()))
-                            ->where('name', 'like', "%{$search}%"),
-                    )),
-                TextColumn::make('sku')
-                    ->label('SKU')
-                    ->searchable()
-                    ->sortable(),
-                TextColumn::make('status')
-                    ->badge(),
-                TextInputColumn::make('price')
-                    ->label('Price')
-                    ->type('number')
-                    ->extraInputAttributes(['step' => '0.01', 'min' => '0', 'inputmode' => 'decimal'])
-                    ->rules(['nullable', 'numeric', 'min:0'])
-                    ->getStateUsing(fn (Product $record) => $record->prices->first()?->price)
-                    ->updateStateUsing(fn (Product $record, $state) => $this->writePrice($record->getKey(), $state)),
+                'prices' => fn ($query) => $query->where('price_list_id', $this->priceListId),
             ])
-            ->filters([
-                TernaryFilter::make('has_price')
-                    ->label('Price')
-                    ->placeholder('All products')
-                    ->trueLabel('With a price')
-                    ->falseLabel('Without a price')
-                    ->queries(
-                        true: fn (Builder $query): Builder => $query->whereHas(
-                            'prices',
-                            fn (Builder $q) => $q->where('price_list_id', $listId),
-                        ),
-                        false: fn (Builder $query): Builder => $query->whereDoesntHave(
-                            'prices',
-                            fn (Builder $q) => $q->where('price_list_id', $listId),
-                        ),
-                        blank: fn (Builder $query): Builder => $query,
-                    ),
+            ->limit(self::ROW_CAP)
+            ->get()
+            ->map(fn (Product $product): array => [
+                'product_id' => $product->id,
+                'name' => $product->translate(Locales::baseCode())?->name,
+                'sku' => $product->sku,
+                'status' => $product->status,
+                'price' => $product->prices->first()?->price,
             ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    BulkAction::make('setPrice')
-                        ->label('Set price')
-                        ->icon('heroicon-o-currency-euro')
-                        ->schema([
-                            TextInput::make('price')
-                                ->numeric()
-                                ->minValue(0)
-                                ->required()
-                                ->extraInputAttributes(['step' => '0.01']),
-                        ])
-                        ->action(function (Collection $records, array $data): void {
-                            $records->each(fn (Product $record) => $this->writePrice($record->getKey(), $data['price']));
+            ->all();
+    }
 
-                            Notification::make()
-                                ->title($records->count().' price(s) updated')
-                                ->success()
-                                ->send();
-                        })
-                        ->deselectRecordsAfterCompletion(),
-                ]),
-            ])
-            ->paginated([25, 50, 100]);
+    /**
+     * @return Builder<Product>
+     */
+    protected function baseQuery(): Builder
+    {
+        $baseLanguageId = Locales::idFor(Locales::baseCode());
+
+        return Product::query()
+            ->when($this->search !== '', fn (Builder $q) => $q->where(fn (Builder $w) => $w
+                ->where('sku', 'like', "%{$this->search}%")
+                ->orWhereHas('translations', fn (Builder $t) => $t
+                    ->where('language_id', $baseLanguageId)
+                    ->where('name', 'like', "%{$this->search}%"))))
+            ->when($this->hasPrice === 'yes', fn (Builder $q) => $q->whereHas(
+                'prices', fn (Builder $r) => $r->where('price_list_id', $this->priceListId),
+            ))
+            ->when($this->hasPrice === 'no', fn (Builder $q) => $q->whereDoesntHave(
+                'prices', fn (Builder $r) => $r->where('price_list_id', $this->priceListId),
+            ))
+            ->when($this->categoryTermId, function (Builder $q): void {
+                $term = TaxonomyTerm::query()->find($this->categoryTermId);
+                $ids = $term ? [$term->getKey(), ...$term->descendantIds()] : [$this->categoryTermId];
+                $q->whereHas('taxonomyTerms', fn (Builder $t) => $t->whereIn('taxonomy_terms.id', $ids));
+            })
+            ->orderBy('sku');
+    }
+
+    // ---- persistence from the grid ----------------------------------------
+
+    /**
+     * @param  array<int, array{product_id: int, price: mixed}>  $changes
+     */
+    public function saveCells(array $changes): void
+    {
+        DB::transaction(function () use ($changes): void {
+            foreach ($changes as $change) {
+                $this->writePrice((int) $change['product_id'], $change['price'] ?? null);
+            }
+        });
     }
 
     public function writePrice(int $productId, mixed $state): void
@@ -162,5 +242,86 @@ class ManagePrices extends Page implements HasTable
             ['product_id' => $productId, 'price_list_id' => $this->priceListId],
             ['price' => $state],
         );
+    }
+
+    // ---- bulk actions -----------------------------------------------------
+
+    protected function assertSelection(): bool
+    {
+        if ($this->selectedProductIds === []) {
+            Notification::make()->title('Select some rows in the grid first')->warning()->send();
+
+            return false;
+        }
+
+        return true;
+    }
+
+    public function setFixedPriceAction(): Action
+    {
+        return Action::make('setFixedPrice')
+            ->label('Set price')
+            ->icon('heroicon-o-currency-euro')
+            ->schema([
+                TextInput::make('price')->numeric()->minValue(0)->required()
+                    ->extraInputAttributes(['step' => '0.01']),
+            ])
+            ->action(function (array $data): void {
+                if (! $this->assertSelection()) {
+                    return;
+                }
+
+                $n = PriceAdjuster::setFixed($this->selectedProductIds, $this->priceListId, (float) $data['price']);
+                $this->notifyDone("$n price(s) set");
+            });
+    }
+
+    public function adjustSelectionAction(): Action
+    {
+        return Action::make('adjustSelection')
+            ->label('Adjust % (selection)')
+            ->icon('heroicon-o-receipt-percent')
+            ->schema([
+                TextInput::make('percent')->numeric()->required()
+                    ->helperText('e.g. 10 for +10%, -15 for −15%.'),
+            ])
+            ->action(function (array $data): void {
+                if (! $this->assertSelection()) {
+                    return;
+                }
+
+                $n = PriceAdjuster::adjustProducts($this->selectedProductIds, $this->priceListId, (float) $data['percent']);
+                $this->notifyDone("$n price(s) adjusted (rows without a price in this list were skipped)");
+            });
+    }
+
+    public function adjustCategoryAction(): Action
+    {
+        return Action::make('adjustCategory')
+            ->label('Adjust % (category)')
+            ->icon('heroicon-o-tag')
+            ->schema([
+                Select::make('taxonomy_term_id')
+                    ->label('Category')
+                    ->options(fn (): array => $this->categoryOptions())
+                    ->searchable()
+                    ->required(),
+                TextInput::make('percent')->numeric()->required()
+                    ->helperText('Applies only to the price list selected above.'),
+            ])
+            ->action(function (array $data): void {
+                $n = PriceAdjuster::adjustCategory(
+                    (int) $data['taxonomy_term_id'],
+                    $this->priceListId,
+                    (float) $data['percent'],
+                );
+                $this->notifyDone("$n price(s) adjusted in this list");
+            });
+    }
+
+    protected function notifyDone(string $message): void
+    {
+        Notification::make()->title($message)->success()->send();
+        $this->refreshGrid();
     }
 }
