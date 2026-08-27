@@ -69,6 +69,34 @@ class VariantGenerator
     }
 
     /**
+     * Keep only the term selections for taxonomies that are enabled, as
+     * [taxonomyId => [termId, ...]] with clean, de-duplicated int ids.
+     *
+     * @param  array<int|string, mixed>  $termsByTaxonomy
+     * @param  array<int, int|string>  $enabledTaxonomyIds  empty keeps every taxonomy
+     * @return array<int, array<int, int>>
+     */
+    public static function normalizeSelection(array $termsByTaxonomy, array $enabledTaxonomyIds = []): array
+    {
+        $enabled = array_map('intval', $enabledTaxonomyIds);
+        $out = [];
+
+        foreach ($termsByTaxonomy as $taxonomyId => $termIds) {
+            if ($enabled !== [] && ! in_array((int) $taxonomyId, $enabled, true)) {
+                continue;
+            }
+
+            $ids = array_values(array_unique(array_filter(array_map('intval', (array) $termIds))));
+
+            if ($ids !== []) {
+                $out[(int) $taxonomyId] = $ids;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * @param  array<int, TaxonomyTerm|null>  $terms
      */
     public static function proposedSku(string $parentSku, array $terms): string

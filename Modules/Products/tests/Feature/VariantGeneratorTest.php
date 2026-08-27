@@ -67,6 +67,24 @@ class VariantGeneratorTest extends TestCase
         $this->assertSame([], VariantGenerator::combinations([3 => [], 4 => []]));
     }
 
+    public function test_normalize_selection_keeps_only_enabled_taxonomies_with_clean_ids(): void
+    {
+        $normalized = VariantGenerator::normalizeSelection(
+            ['10' => ['1', '2', '2', null, ''], '11' => ['3'], '12' => []],
+            [10, 12],
+        );
+
+        $this->assertSame([10 => [1, 2]], $normalized);
+    }
+
+    public function test_normalize_selection_with_no_enabled_list_keeps_every_non_empty_group(): void
+    {
+        $this->assertSame(
+            [5 => [7], 6 => [8, 9]],
+            VariantGenerator::normalizeSelection([5 => [7], 6 => [8, 9], 7 => []]),
+        );
+    }
+
     public function test_generate_creates_one_variant_per_combination_with_proposed_skus(): void
     {
         ['parent' => $parent, 'colour' => $c, 'size' => $s] = $this->catalogue();
