@@ -159,7 +159,8 @@ app/
 │       │   ├── ListProducts.php
 │       │   ├── CreateProduct.php
 │       │   └── EditProduct.php
-│       ├── Schemas/ProductForm.php          # create/edit form schema
+│       ├── Concerns/HandlesProductTranslations.php  # per-locale load/save
+│       ├── Schemas/ProductForm.php          # create/edit form schema (+ translation tabs)
 │       └── Tables/ProductsTable.php         # list table: columns, filters, actions
 ├── Http/Controllers/ProductsController.php
 ├── Models/Product.php
@@ -189,7 +190,8 @@ module.json                                  # name, alias, service providers
 | `status` | string | default `draft` (`draft` / `active` / `archived` in the UI) |
 | `created_at` / `updated_at` | timestamp | |
 
-Mass-assignable: `sku`, `external_id`, `status`.
+Mass-assignable: `sku`, `external_id`, `status`. Translatable content
+(`name`, `description`) lives in the Localization module — see below.
 
 ### Admin routes
 
@@ -200,6 +202,65 @@ Mass-assignable: `sku`, `external_id`, `status`.
 | `GET /admin/products/{record}/edit` | `filament.admin.resources.products.edit` |
 
 All behind auth; unauthenticated requests redirect to `/admin/login`.
+
+---
+
+## Localization module
+
+Multilingual product content (`name`, `description`), **independent from
+`APP_LOCALE`** (which only sets the admin UI language). Translations live in a
+satellite table, one row per `(product_id, locale)`, with **no automatic
+fallback** — a missing row shows as empty.
+
+### Supported locales — single source of truth
+
+`Modules/Localization/app/Enums/Locale.php`:
+
+| Code | Language | |
+|---|---|---|
+| `it` | Italiano | base / default |
+| `en` | English | |
+| `es` | Español | |
+| `fr` | Français | |
+| `de` | Deutsch | |
+
+`Locale::default()` → `it`, `Locale::values()` → the code list. Migration, model,
+Filament form and table all iterate `Locale::cases()` — languages are never
+hardcoded elsewhere.
+
+### `product_translations` table
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | bigint | PK |
+| `product_id` | bigint | FK → `products`, cascade on delete |
+| `locale` | string(5) | |
+| `name` | string | required — a row exists only if it has a name |
+| `description` | text | nullable; stores RichEditor HTML |
+| `created_at` / `updated_at` | timestamp | |
+
+Unique on `(product_id, locale)`.
+
+### Model API
+
+`Modules\Localization\Models\ProductTranslation` — `belongsTo(Product)`.
+`Product` (Products module) gains:
+
+```php
+$product->translations;               // HasMany<ProductTranslation>
+$product->translate('en');            // ?ProductTranslation, null if absent (no fallback)
+$product->translate(Locale::German);  // the enum works too
+```
+
+### Editing translations
+
+No dedicated Filament resource. The **Products** create/edit form has a `Tabs`
+block with one tab per locale (`name` + `description` RichEditor, base-locale
+name required). Load/save is handled by `HandlesProductTranslations`
+(`Modules/Products/app/Filament/Resources/Products/Concerns/`): rows are written
+to `product_translations` in `afterCreate` / `afterSave`, and a locale left
+without a name is pruned. The products list shows the base-locale name in its
+first column.
 
 ---
 
@@ -240,6 +301,8 @@ always writes into the app panel namespace — hence the manual move.
 ## Deployment (Netsons shared hosting)
 
 - Document root points at `public/`. PHP 8.4.
+- The server database is **MySQL/MariaDB** (`.env` on the server sets
+  `DB_CONNECTION=mysql`); the SQLite default applies only to a fresh local clone.
 - Node is **not** available on the server, so the compiled `public/` assets are
   committed to the repo.
 - **HTTPS is enforced**: `public/.htaccess` 301-redirects plain HTTP to HTTPS
