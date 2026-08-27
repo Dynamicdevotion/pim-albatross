@@ -17,7 +17,10 @@ class ProductsTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('translations'))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
+                'translations',
+                'taxonomyTerms.taxonomy',
+            ]))
             ->columns([
                 TextColumn::make('name_base')
                     ->label('Name')
@@ -44,6 +47,16 @@ class ProductsTable
                     ->color(fn (string $state): string => $state === strtoupper(Locale::default()->value) ? 'primary' : 'gray')
                     ->placeholder('—')
                     ->tooltip('Locales this product has content for'),
+                TextColumn::make('taxonomy_terms')
+                    ->label('Terms')
+                    ->badge()
+                    ->getStateUsing(fn (Product $record): array => $record->taxonomyTerms
+                        ->sortBy(fn ($term): string => $term->taxonomy->name.$term->name)
+                        ->map(fn ($term): string => "{$term->taxonomy->name}: {$term->name}")
+                        ->values()
+                        ->all())
+                    ->placeholder('—')
+                    ->toggleable(),
                 TextColumn::make('sku')
                     ->label('SKU')
                     ->searchable()

@@ -7,7 +7,9 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder;
 use Modules\Localization\Enums\Locale;
+use Modules\Taxonomies\Models\TaxonomyTerm;
 
 class ProductForm
 {
@@ -33,6 +35,19 @@ class ProductForm
                         'active' => 'Active',
                         'archived' => 'Archived',
                     ]),
+                Select::make('taxonomyTerms')
+                    ->label('Taxonomy terms')
+                    ->relationship(
+                        'taxonomyTerms',
+                        'name',
+                        fn (Builder $query): Builder => $query->with('taxonomy'),
+                    )
+                    ->multiple()
+                    ->preload()
+                    ->searchable()
+                    ->getOptionLabelFromRecordUsing(fn (TaxonomyTerm $record): string =>
+                        "{$record->taxonomy->name}: {$record->name}")
+                    ->columnSpanFull(),
                 Tabs::make('translations')
                     ->columnSpanFull()
                     ->tabs(array_map(

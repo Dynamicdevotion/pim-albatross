@@ -6,6 +6,7 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Modules\Products\Filament\Resources\Products\Pages\CreateProduct;
 use Modules\Products\Models\Product;
 use Modules\Taxonomies\Filament\Resources\Taxonomies\Pages\CreateTaxonomy;
 use Modules\Taxonomies\Filament\Resources\Taxonomies\Pages\EditTaxonomy;
@@ -114,5 +115,29 @@ class TaxonomiesTest extends TestCase
         $child = $taxonomy->terms()->create(['name' => 'Scarpe', 'parent_id' => $parent->id]);
         $this->assertSame($taxonomy->id, $child->taxonomy_id);
         $this->assertSame($parent->id, $child->parent_id);
+    }
+
+    public function test_product_form_attaches_terms_from_different_taxonomies(): void
+    {
+        $clothing = Taxonomy::create(['name' => 'Categoria'])->terms()->create(['name' => 'Abbigliamento']);
+        $red = Taxonomy::create(['name' => 'Colore'])->terms()->create(['name' => 'Rosso']);
+
+        Livewire::test(CreateProduct::class)
+            ->fillForm([
+                'sku' => 'TX-FORM',
+                'status' => 'draft',
+                'taxonomyTerms' => [$clothing->id, $red->id],
+                'translations' => ['it' => ['name' => 'Maglietta']],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $product = Product::where('sku', 'TX-FORM')->sole();
+
+        $this->assertEqualsCanonicalizing(
+            [$clothing->id, $red->id],
+            $product->taxonomyTerms->pluck('id')->all(),
+        );
+        $this->assertDatabaseCount('product_taxonomy_term', 2);
     }
 }
