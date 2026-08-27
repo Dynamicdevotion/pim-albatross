@@ -255,8 +255,17 @@ cd ~/apps/pim
 git pull
 composer install --no-dev --optimize-autoloader
 php artisan migrate --force
-php artisan optimize:clear
+php artisan optimize        # rebuild config/route/view/event + Filament caches
 ```
+
+`php artisan optimize` writes the production caches to `bootstrap/cache/`
+(`config.php`, `routes-v7.php`, `events.php`, `blade-icons.php`). Because config
+and routes are then frozen, **re-run `php artisan optimize` after any change to
+`.env`, `config/*`, or the route files** — otherwise the change is not picked up.
+Use `php artisan optimize:clear` to drop all caches (e.g. when debugging).
+
+For `route:cache` to succeed, route files must not use Closure handlers — use
+`Route::view()` / controllers instead (the `/` route already does).
 
 ---
 
@@ -264,7 +273,8 @@ php artisan optimize:clear
 
 ```bash
 php artisan route:list --path=admin/products
-php artisan optimize:clear          # clear config/route/view/event/filament caches
+php artisan optimize                # build production caches (config/route/view/event/filament)
+php artisan optimize:clear          # drop all of the above
 php artisan make:filament-user
 composer test                       # config:clear + artisan test
 ./vendor/bin/pint                   # code style
