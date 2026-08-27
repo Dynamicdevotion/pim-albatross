@@ -254,9 +254,14 @@ Deploy pull:
 cd ~/apps/pim
 git pull
 composer install --no-dev --optimize-autoloader
+php artisan optimize:clear          # drop stale caches before migrating
 php artisan migrate --force
-php artisan optimize        # rebuild config/route/view/event + Filament caches
+php artisan optimize                # rebuild caches: config/route/view/event + Filament
 ```
+
+Order matters: clear the caches first so `migrate` and the other artisan
+commands run against the fresh config, then rebuild the caches with `optimize`
+as the **last** step, after `migrate`.
 
 `php artisan optimize` writes the production caches to `bootstrap/cache/`
 (`config.php`, `routes-v7.php`, `events.php`, `blade-icons.php`). Because config
