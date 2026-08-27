@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Modules\Localization\Models\Language;
 use Modules\Localization\Support\Locales;
+use Modules\Products\Enums\ProductType;
 use Modules\Products\Models\Product;
 use Modules\Taxonomies\Models\Taxonomy;
 use Modules\Taxonomies\Models\TaxonomyTerm;
@@ -24,10 +25,11 @@ class ProductsTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
-                'translations',
-                'taxonomyTerms.taxonomy',
-            ]))
+            // Top-level products only: variants are managed inside their parent.
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->whereNull('parent_id')
+                ->withCount('variants')
+                ->with(['translations', 'taxonomyTerms.taxonomy']))
             ->columns([
                 TextColumn::make('name_base')
                     ->label(__('pim.field.name'))
@@ -37,6 +39,16 @@ class ProductsTable
                         fn (Builder $q) => $q->where('language_id', Locales::idFor(Locales::baseCode()))
                             ->where('name', 'like', "%{$search}%"),
                     )),
+                TextColumn::make('type')
+                    ->label(__('pim.field.type'))
+                    ->badge()
+                    ->sortable(),
+                TextColumn::make('variants_count')
+                    ->label(__('pim.field.variants'))
+                    ->tooltip(__('pim.tooltip.variants_count'))
+                    ->formatStateUsing(fn (int $state, Product $record): string => $record->isVariable()
+                        ? trans_choice('pim.column.variants_count', $state, ['count' => $state])
+                        : '—'),
                 TextColumn::make('translated_locales')
                     ->label(__('pim.field.translations'))
                     ->badge()
@@ -92,6 +104,11 @@ class ProductsTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
+                SelectFilter::make('type')
+                    ->label(__('pim.filter.type'))
+                    ->options(collect(ProductType::cases())
+                        ->mapWithKeys(fn (ProductType $type): array => [$type->value => $type->getLabel()])
+                        ->all()),
                 SelectFilter::make('status')
                     ->label(__('pim.field.status'))
                     ->options([

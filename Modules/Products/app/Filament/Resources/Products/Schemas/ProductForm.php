@@ -7,11 +7,14 @@ use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Localization\Models\Language;
 use Modules\Localization\Support\Locales;
 use Modules\Pricing\Models\PriceList;
+use Modules\Products\Enums\ProductType;
+use Modules\Products\Models\Product;
 use Modules\Taxonomies\Models\TaxonomyTerm;
 
 class ProductForm
@@ -20,6 +23,24 @@ class ProductForm
     {
         return $schema
             ->components([
+                Select::make('type')
+                    ->label(__('pim.field.type'))
+                    ->options(collect(ProductType::cases())
+                        ->mapWithKeys(fn (ProductType $type): array => [$type->value => $type->getLabel()])
+                        ->all())
+                    ->default(ProductType::Simple->value)
+                    ->required()
+                    ->native(false)
+                    ->live()
+                    ->dehydrated()
+                    // Locked once the container has variants — clear them first
+                    // (enforced again by Product's saving guard).
+                    ->disabled(fn (?Product $record): bool => $record !== null
+                        && $record->isVariable()
+                        && $record->variants()->exists())
+                    ->helperText(fn (Get $get): ?string => $get('type') === ProductType::Variable->value
+                        ? __('pim.helper.variable_no_price')
+                        : null),
                 TextInput::make('sku')
                     ->label(__('pim.field.sku'))
                     ->required()
@@ -39,6 +60,12 @@ class ProductForm
                         'active' => __('pim.option.status.active'),
                         'archived' => __('pim.option.status.archived'),
                     ]),
+                TextInput::make('stock')
+                    ->label(__('pim.field.stock'))
+                    ->numeric()
+                    ->minValue(0)
+                    ->default(0)
+                    ->visible(fn (Get $get): bool => $get('type') !== ProductType::Variable->value),
                 Select::make('taxonomyTerms')
                     ->label(__('pim.field.taxonomy_terms'))
                     ->relationship(
@@ -55,6 +82,7 @@ class ProductForm
                 Repeater::make('prices')
                     ->label(__('pim.field.prices'))
                     ->relationship()
+                    ->visible(fn (Get $get): bool => $get('type') !== ProductType::Variable->value)
                     ->columns(2)
                     ->schema([
                         Select::make('price_list_id')

@@ -42,8 +42,15 @@ class Product extends Model
     protected static function booted(): void
     {
         // Backstop for every write path (Filament, tinker, seeders, future API):
-        // keep the simple / variable / variant shape internally consistent.
-        static::saving(fn (Product $product) => $product->assertConsistentType());
+        // a variable product never carries its own stock, and the
+        // simple / variable / variant shape stays internally consistent.
+        static::saving(function (Product $product): void {
+            if ($product->type === ProductType::Variable) {
+                $product->stock = null;
+            }
+
+            $product->assertConsistentType();
+        });
     }
 
     // ---- relationships ----------------------------------------------------
