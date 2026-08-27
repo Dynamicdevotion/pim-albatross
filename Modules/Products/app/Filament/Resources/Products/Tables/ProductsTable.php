@@ -8,13 +8,25 @@ use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Modules\Localization\Enums\Locale;
+use Modules\Products\Models\Product;
 
 class ProductsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('translations'))
             ->columns([
+                TextColumn::make('name_base')
+                    ->label('Name')
+                    ->getStateUsing(fn (Product $record): ?string => $record->translate(Locale::default())?->name)
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas(
+                        'translations',
+                        fn ($q) => $q->where('locale', Locale::default()->value)
+                            ->where('name', 'like', "%{$search}%"),
+                    )),
                 TextColumn::make('sku')
                     ->label('SKU')
                     ->searchable()

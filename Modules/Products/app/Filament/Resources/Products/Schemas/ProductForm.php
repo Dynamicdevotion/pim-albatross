@@ -2,9 +2,12 @@
 
 namespace Modules\Products\Filament\Resources\Products\Schemas;
 
+use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Schema;
+use Modules\Localization\Enums\Locale;
 
 class ProductForm
 {
@@ -30,6 +33,21 @@ class ProductForm
                         'active' => 'Active',
                         'archived' => 'Archived',
                     ]),
+                Tabs::make('translations')
+                    ->columnSpanFull()
+                    ->tabs(array_map(
+                        fn (Locale $locale): Tabs\Tab => Tabs\Tab::make(
+                            $locale->label().($locale->isDefault() ? ' — base' : ''),
+                        )->schema([
+                            TextInput::make("translations.{$locale->value}.name")
+                                ->label('Name')
+                                ->maxLength(255)
+                                ->required($locale->isDefault()),
+                            RichEditor::make("translations.{$locale->value}.description")
+                                ->label('Description'),
+                        ]),
+                        Locale::cases(),
+                    )),
             ]);
     }
 }
