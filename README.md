@@ -313,7 +313,9 @@ $product->taxonomyTerms();        // BelongsToMany, via product_taxonomy_term
   descendants).
 - The **Products** form has a multiple *Taxonomy terms* select (`relationship()`
   mode → the pivot syncs automatically); options and the products-list *Terms*
-  column read as `"Taxonomy: Term"`.
+  column read as `"Taxonomy: Term"`. The products list also has a bulk
+  **"Assign taxonomy terms"** action (`syncWithoutDetaching` onto every selected
+  product).
 
 ---
 
@@ -349,16 +351,42 @@ $product->prices;         // HasMany<ProductPrice>
   name + active. On **create**, an optional *"Populate prices from another list"*
   section copies every price from a source list applying a signed percentage
   (`round(price * (1 + pct/100), 2)`), handled in `HandlesPricePopulation`.
-- **`ManagePrices`** page (`/admin/prices`, "Bulk price editing") — a live
-  price-list `<select>` above a table of **every product** with an
-  inline-editable `Price` column (writing `updateOrCreate`s the `product_prices`
-  row, clearing it deletes it), a *with price / without price* filter and a
-  *Set price* bulk action.
+- **`ManagePrices`** page (`/admin/prices`, "Bulk price editing") — an
+  **Excel-like grid** (jspreadsheet CE v4, vendored — see *Deployment*) of every
+  product's price in one list: drag-select, paste a block from a real
+  spreadsheet, drag-fill. Edits are debounce-batched to `saveCells()`
+  (`updateOrCreate` per row, blank = delete). A toolbar on top carries:
+  - price-list select, name/SKU search, with/without-price filter, category
+    filter, and a **Columns** show/hide row;
+  - **saved views** (see below) that store exactly those filters + columns;
+  - bulk actions: *set fixed price*, *±% on the grid selection*, *±% by
+    taxonomy category* — the ± actions only touch rows that already have a
+    price **in the selected list** (missing ones skipped, other lists never).
+  - loads all filtered rows up to a 1000 cap (banner past it).
 - The **Products** form has a *Prices* `Repeater` on the `prices` relationship
   (price-list select `->distinct()` + price) for quick per-list edits from the
-  product card.
+  product card. `PriceAdjuster` (`Modules/Pricing/app/Support/`) holds the
+  reusable set/adjust logic.
 
-`PricingSeeder` creates a `Standard` default list (idempotent).
+`PricingSeeder` creates a `Standard` default list; `ProductPriceSeeder` gives
+every product a price in every active list (both idempotent).
+
+---
+
+## SavedViews module
+
+Reusable per-user snapshots of a screen's filters + visible columns.
+
+- `saved_views` (`user_id` FK cascade, `resource` string, `name`, `filters`
+  json, `columns` json; unique per `user_id + resource + name`).
+- `SavedView` model — array casts, `forUser()` / `forResource()` scopes.
+- **`InteractsWithSavedViews`** trait: a Livewire page implements
+  `savedViewResourceKey()`, `captureViewState()`, `applyViewState()`; the trait
+  adds a `savedViewId` property, the per-user option list, an
+  `updatedSavedViewId` hook that restores state, and Save / Update / Delete
+  Filament actions. Applied to the price grid (`resource: "pricing.prices"`);
+  reusable on the resource list pages later by snapshotting `tableFilters` and
+  `toggledTableColumns`. No panel plugin — model + trait only.
 
 ---
 
@@ -402,7 +430,12 @@ always writes into the app panel namespace — hence the manual move.
 - The server database is **MySQL/MariaDB** (`.env` on the server sets
   `DB_CONNECTION=mysql`); the SQLite default applies only to a fresh local clone.
 - Node is **not** available on the server, so the compiled `public/` assets are
-  committed to the repo.
+  committed to the repo. Third-party JS/CSS is vendored, not npm-built: e.g.
+  jspreadsheet CE v4 + jsuites (both MIT) live in
+  `Modules/Pricing/resources/js/vendor/`, are registered with `FilamentAsset`
+  in `PricingPanelPlugin`, and `php artisan filament:assets` publishes them to
+  `public/js/pricing` + `public/css/pricing` (committed). Re-run
+  `php artisan filament:assets` after changing a vendored file.
 - **HTTPS is enforced**: `public/.htaccess` 301-redirects plain HTTP to HTTPS
   (guarded on `%{HTTPS}` and `X-Forwarded-Proto` so it is loop-safe), and
   `AppServiceProvider` calls `URL::forceScheme('https')` in production.
