@@ -9,6 +9,7 @@ use Livewire\Livewire;
 use Modules\Localization\Database\Seeders\LanguageSeeder;
 use Modules\Localization\Models\Language;
 use Modules\Products\Filament\Resources\Products\Pages\CreateProduct;
+use Modules\Products\Filament\Resources\Products\Pages\ListProducts;
 use Modules\Products\Models\Product;
 use Modules\Taxonomies\Database\Seeders\TaxonomySeeder;
 use Modules\Taxonomies\Filament\Resources\Taxonomies\Pages\CreateTaxonomy;
@@ -189,5 +190,23 @@ class TaxonomiesTest extends TestCase
         (new TaxonomySeeder())->run();
         $this->assertSame($before, TaxonomyTerm::count());
         $this->assertCount(4, Taxonomy::all());
+    }
+
+    public function test_products_list_bulk_assigns_taxonomy_terms(): void
+    {
+        $taxonomy = Taxonomy::factory()->named('Categoria')->create();
+        $a = $this->term($taxonomy, 'Abbigliamento');
+        $b = $this->term($taxonomy, 'Scarpe');
+
+        $p1 = Product::create(['sku' => 'BULK-1', 'status' => 'draft']);
+        $p2 = Product::create(['sku' => 'BULK-2', 'status' => 'draft']);
+        $p2->taxonomyTerms()->attach($a->id); // already has one
+
+        Livewire::test(ListProducts::class)
+            ->callTableBulkAction('assignTaxonomyTerms', [$p1, $p2], ['terms' => [$a->id, $b->id]]);
+
+        $this->assertEqualsCanonicalizing([$a->id, $b->id], $p1->fresh()->taxonomyTerms->pluck('id')->all());
+        $this->assertEqualsCanonicalizing([$a->id, $b->id], $p2->fresh()->taxonomyTerms->pluck('id')->all());
+        $this->assertDatabaseCount('product_taxonomy_term', 4); // no duplicate for p2/$a
     }
 }

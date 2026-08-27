@@ -144,17 +144,21 @@ class ManagePrices extends Page
     }
 
     /**
-     * @return array<int|string, string>
+     * Term id => "Taxonomy: Term".
+     *
+     * @return array<int, string>
      */
     public function categoryOptions(): array
     {
-        return Taxonomy::query()
-            ->with(['translations', 'terms.translations'])
-            ->get()
-            ->flatMap(fn (Taxonomy $taxonomy) => $taxonomy->terms->mapWithKeys(
-                fn (TaxonomyTerm $term) => [$term->id => "{$taxonomy->name}: {$term->name}"],
-            ))
-            ->all();
+        $options = [];
+
+        foreach (Taxonomy::query()->with(['translations', 'terms.translations'])->get() as $taxonomy) {
+            foreach ($taxonomy->terms as $term) {
+                $options[$term->id] = "{$taxonomy->name}: {$term->name}";
+            }
+        }
+
+        return $options;
     }
 
     public function gridCapped(): bool

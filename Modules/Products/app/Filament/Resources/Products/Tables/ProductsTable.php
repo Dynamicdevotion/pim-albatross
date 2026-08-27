@@ -2,16 +2,22 @@
 
 namespace Modules\Products\Filament\Resources\Products\Tables;
 
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Modules\Localization\Models\Language;
 use Modules\Localization\Support\Locales;
 use Modules\Products\Models\Product;
+use Modules\Taxonomies\Models\Taxonomy;
+use Modules\Taxonomies\Models\TaxonomyTerm;
 
 class ProductsTable
 {
@@ -108,8 +114,47 @@ class ProductsTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    BulkAction::make('assignTaxonomyTerms')
+                        ->label('Assign taxonomy terms')
+                        ->icon('heroicon-o-tag')
+                        ->schema([
+                            Select::make('terms')
+                                ->label('Terms')
+                                ->multiple()
+                                ->searchable()
+                                ->required()
+                                ->options(fn (): array => self::taxonomyTermOptions()),
+                        ])
+                        ->action(function (Collection $records, array $data): void {
+                            $records->each(fn (Product $product) => $product->taxonomyTerms()
+                                ->syncWithoutDetaching($data['terms']));
+
+                            Notification::make()
+                                ->title("Terms assigned to {$records->count()} product(s)")
+                                ->success()
+                                ->send();
+                        })
+                        ->deselectRecordsAfterCompletion(),
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * Term id => "Taxonomy: Term", grouped by taxonomy in a stable order.
+     *
+     * @return array<int, string>
+     */
+    public static function taxonomyTermOptions(): array
+    {
+        $options = [];
+
+        foreach (Taxonomy::query()->with(['translations', 'terms.translations'])->get() as $taxonomy) {
+            foreach ($taxonomy->terms as $term) {
+                $options[$term->id] = "{$taxonomy->name}: {$term->name}";
+            }
+        }
+
+        return $options;
     }
 }
