@@ -16,11 +16,13 @@ use Filament\Schemas\Components\Wizard\Step;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Modules\ImportGestionali\Enums\TargetField;
 use Modules\ImportGestionali\Filament\Resources\ImportRecords\ImportRecordResource;
 use Modules\ImportGestionali\Jobs\RunProductImport;
@@ -61,6 +63,11 @@ class ImportProducts extends Page
 
     public ?string $encoding = null;
 
+    /** Path of the inspected file on the import disk, ready for the run. */
+    public ?string $storedPath = null;
+
+    public ?string $originalName = null;
+
     public static function getNavigationGroup(): ?string
     {
         return __('pim.import.nav.group');
@@ -95,6 +102,10 @@ class ImportProducts extends Page
                                 ->disk(config('importgestionali.disk'))
                                 ->directory('imports')
                                 ->visibility('private')
+                                // The wizard never submits this field as a form —
+                                // we move the validated upload ourselves, right
+                                // after inspecting it (see handleUpload()).
+                                ->storeFiles(false)
                                 ->storeFileNamesIn('file_original_names')
                                 ->acceptedFileTypes([
                                     'text/csv', 'text/plain', 'application/csv',
@@ -105,9 +116,7 @@ class ImportProducts extends Page
                                 ->maxSize(((int) config('importgestionali.max_file_mb', 20)) * 1024)
                                 ->required()
                                 ->helperText(__('pim.import.help.file'))
-                                ->afterStateUpdated(function (mixed $state): void {
-                                    $this->inspectFile(is_string($state) ? $state : null);
-                                }),
+                                ->afterStateUpdated(fn (mixed $state) => $this->handleUpload($state)),
                         ])
                         ->afterValidation(function (): void {
                             if ($this->fileHeader === []) {
@@ -139,8 +148,41 @@ class ImportProducts extends Page
     }
 
     /**
-     * Parse the just-uploaded file. A file-level failure is surfaced here and
-     * clears the upload so the step's hidden validator keeps the user put.
+     * Runs when a file finishes uploading. Filament only moves an upload to its
+     * target disk on form submit, so during the wizard the state is a
+     * TemporaryUploadedFile — we move it to the import disk ourselves once it
+     * has been read successfully.
+     */
+    public function handleUpload(mixed $state): void
+    {
+        $this->resetInspection();
+
+        $file = is_array($state) ? Arr::first($state) : $state;
+
+        if (! $file instanceof TemporaryUploadedFile) {
+            return;
+        }
+
+        $extension = strtolower(
+            $file->getClientOriginalExtension()
+                ?: pathinfo($file->getClientOriginalName(), PATHINFO_EXTENSION)
+                ?: 'csv',
+        );
+
+        $storedPath = $file->storeAs(
+            'imports',
+            Str::random(40).'.'.$extension,
+            ['disk' => config('importgestionali.disk')],
+        );
+
+        $this->originalName = $file->getClientOriginalName();
+        $this->inspectFile($storedPath);
+    }
+
+    /**
+     * Read a file that already sits on the import disk. A file-level failure is
+     * surfaced here and clears the upload so the step cannot be advanced. Also
+     * used directly from tests.
      */
     public function inspectFile(?string $storedPath): void
     {
@@ -171,6 +213,7 @@ class ImportProducts extends Page
             return;
         }
 
+        $this->storedPath = $storedPath;
         $this->fileHeader = $shape->header;
         $this->sampleRows = $shape->sampleRows;
         $this->totalRows = $shape->dataRowCount;
@@ -272,28 +315,25 @@ class ImportProducts extends Page
     public function import(): void
     {
         // Each wizard step was validated on the way here; read the collected
-        // state directly rather than re-running the whole form validation,
-        // which would re-check the (already consumed) upload field.
-        $state = $this->data;
+        // state directly rather than re-running the whole form validation.
         $this->assertMappingValid();
 
-        $storedPath = $state['file'] ?? null;
-
-        if (blank($storedPath) || $this->fileHeader === []) {
+        if (blank($this->storedPath) || $this->fileHeader === []) {
             Notification::make()->danger()->title(__('pim.import.error.title'))->body(__('pim.import.error.not_inspected'))->send();
 
             return;
         }
 
-        $originalName = $state['file_original_names'][$storedPath] ?? basename($storedPath);
+        $originalName = $this->originalName
+            ?? ($this->data['file_original_names'][$this->storedPath] ?? basename($this->storedPath));
 
         $record = ImportRecord::create([
             'user_id' => auth()->id(),
             'original_filename' => $originalName,
-            'stored_path' => $storedPath,
+            'stored_path' => $this->storedPath,
             'status' => 'pending',
-            'update_existing' => (bool) ($state['update_existing'] ?? false),
-            'mapping' => collect($state['mapping'] ?? [])
+            'update_existing' => (bool) ($this->data['update_existing'] ?? false),
+            'mapping' => collect($this->data['mapping'] ?? [])
                 ->map(fn ($value) => $value === '' ? null : $value)
                 ->all(),
             'meta' => [
@@ -331,5 +371,6 @@ class ImportProducts extends Page
         $this->totalRows = null;
         $this->delimiter = null;
         $this->encoding = null;
+        $this->storedPath = null;
     }
 }

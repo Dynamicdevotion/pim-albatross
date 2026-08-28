@@ -5,6 +5,7 @@ namespace Modules\ImportGestionali\Tests\Feature;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -80,14 +81,30 @@ class ImportProductsPageTest extends TestCase
         $this->assertSame(0, Product::where('sku', 'NEW')->count(), 'the preview must not write');
     }
 
+    public function test_uploading_a_file_inspects_it_and_lets_the_step_advance(): void
+    {
+        $component = Livewire::test(ImportProducts::class)
+            ->set('data.file', UploadedFile::fake()->createWithContent(
+                'listino_gioielleria.csv',
+                "Codice;Nome;Prezzo\nAN-1;Anello oro;199,90\nBR-2;Bracciale;89\n",
+            ));
+
+        $page = $component->instance();
+
+        $this->assertSame(['Codice', 'Nome', 'Prezzo'], $page->fileHeader);
+        $this->assertSame(2, $page->totalRows);
+        $this->assertNotNull($page->storedPath, 'the upload must be moved onto the import disk');
+        Storage::disk('local')->assertExists($page->storedPath);
+        $this->assertSame('listino_gioielleria.csv', $page->originalName);
+    }
+
     public function test_a_small_import_runs_inline_and_redirects_to_the_report(): void
     {
-        Storage::disk('local')->put('imports/small.csv', "Codice;Nome;Prezzo\nA1;Sedia;10\nA2;Tavolo;20\n");
-
-        Livewire::test(ImportProducts::class)
-            ->set('data.file', 'imports/small.csv')
-            ->set('data.file_original_names', ['imports/small.csv' => 'listino.csv'])
-            ->call('inspectFile', 'imports/small.csv')
+        $component = Livewire::test(ImportProducts::class)
+            ->set('data.file', UploadedFile::fake()->createWithContent(
+                'listino.csv',
+                "Codice;Nome;Prezzo\nA1;Sedia;10\nA2;Tavolo;20\n",
+            ))
             ->set('data.mapping', [0 => 'sku', 1 => 'name', 2 => 'price'])
             ->call('import')
             ->assertRedirect();
@@ -107,11 +124,9 @@ class ImportProductsPageTest extends TestCase
         for ($i = 1; $i <= 350; $i++) {
             $csv .= "SKU{$i};Prodotto {$i}\n";
         }
-        Storage::disk('local')->put('imports/big.csv', $csv);
 
         Livewire::test(ImportProducts::class)
-            ->set('data.file', 'imports/big.csv')
-            ->call('inspectFile', 'imports/big.csv')
+            ->set('data.file', UploadedFile::fake()->createWithContent('big.csv', $csv))
             ->set('data.mapping', [0 => 'sku', 1 => 'name'])
             ->call('import')
             ->assertRedirect();
@@ -119,5 +134,15 @@ class ImportProductsPageTest extends TestCase
         Queue::assertPushed(RunProductImport::class);
         $this->assertSame('pending', ImportRecord::sole()->status);
         $this->assertSame(350, ImportRecord::sole()->total_rows);
+    }
+
+    public function test_an_unreadable_file_keeps_the_user_on_the_upload_step(): void
+    {
+        $page = Livewire::test(ImportProducts::class)
+            ->set('data.file', UploadedFile::fake()->createWithContent('broken.xlsx', 'not a spreadsheet at all'))
+            ->instance();
+
+        $this->assertSame([], $page->fileHeader);
+        $this->assertNull($page->storedPath);
     }
 }

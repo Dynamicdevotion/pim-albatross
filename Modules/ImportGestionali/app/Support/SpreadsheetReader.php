@@ -52,11 +52,20 @@ class SpreadsheetReader
 
         try {
             foreach ($reader->getSheetIterator() as $sheet) {
-                foreach ($sheet->getRowIterator() as $line => $row) {
+                $headerSeen = false;
+
+                foreach ($sheet->getRowIterator() as $row) {
                     $cells = $this->stringifyCells($row->toArray());
 
-                    if ($line === 1) {
+                    if (! $headerSeen) {
+                        // The header is the first non-blank row — a file can have
+                        // a title or image row above it (common in ERP exports).
+                        if ($this->isBlank($cells)) {
+                            continue;
+                        }
+
                         $header = $cells;
+                        $headerSeen = true;
 
                         continue;
                     }
@@ -119,12 +128,18 @@ class SpreadsheetReader
         try {
             foreach ($reader->getSheetIterator() as $sheet) {
                 $width = null;
+                $headerSeen = false;
 
                 foreach ($sheet->getRowIterator() as $line => $row) {
                     $cells = $this->stringifyCells($row->toArray());
 
-                    if ($line === 1) {
+                    if (! $headerSeen) {
+                        if ($this->isBlank($cells)) {
+                            continue;
+                        }
+
                         $width = count(self::normalizeHeader($cells));
+                        $headerSeen = true;
 
                         continue;
                     }

@@ -124,13 +124,47 @@ class SpreadsheetReaderTest extends TestCase
         (new SpreadsheetReader)->inspect($path, 'csv');
     }
 
-    public function test_a_missing_header_is_rejected(): void
+    public function test_a_blank_only_file_is_rejected(): void
     {
-        $path = $this->tmp('csv', "\nA1;B1\nA2;B2\n");
+        $path = $this->tmp('csv', "\n\n\n");
 
         $this->expectException(UnreadableImportFile::class);
 
         (new SpreadsheetReader)->inspect($path, 'csv');
+    }
+
+    public function test_leading_blank_rows_are_skipped_and_the_header_is_the_first_real_row(): void
+    {
+        $path = $this->tmp('csv', "\n\nCodice;Nome;Prezzo\nA1;Sedia;10\nA2;Tavolo;20\n");
+
+        $reader = new SpreadsheetReader;
+        $shape = $reader->inspect($path, 'csv');
+
+        $this->assertSame(['Codice', 'Nome', 'Prezzo'], $shape->header);
+        $this->assertSame(2, $shape->dataRowCount);
+        $this->assertSame(['A1', 'Sedia', '10'], $shape->sampleRows[0]);
+
+        // and rows() agrees on where the header is, keeping physical line numbers
+        $rows = iterator_to_array($reader->rows($path, 'csv', ';', null));
+        $this->assertSame([4, 5], array_keys($rows));
+    }
+
+    public function test_an_xlsx_with_a_blank_first_row_still_reads(): void
+    {
+        $path = sys_get_temp_dir().'/imp_'.bin2hex(random_bytes(6)).'.xlsx';
+        $this->tmpFiles[] = $path;
+
+        $writer = new XlsxWriter;
+        $writer->openToFile($path);
+        $writer->addRow(Row::fromValues(['', '', '']));
+        $writer->addRow(Row::fromValues(['Codice', 'Nome', 'Prezzo']));
+        $writer->addRow(Row::fromValues(['A1', 'Anello', '99']));
+        $writer->close();
+
+        $shape = (new SpreadsheetReader)->inspect($path, 'xlsx');
+
+        $this->assertSame(['Codice', 'Nome', 'Prezzo'], $shape->header);
+        $this->assertSame(1, $shape->dataRowCount);
     }
 
     public function test_legacy_xls_is_rejected(): void
