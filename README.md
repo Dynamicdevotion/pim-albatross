@@ -697,6 +697,18 @@ always writes into the app panel namespace — hence the manual move.
   `AppServiceProvider` calls `URL::forceScheme('https')` in production.
 - Outbound SSH on port 22 is blocked, so `origin` uses SSH over 443
   (`ssh://git@ssh.github.com:443/...`) with a repo deploy key.
+- **No long-running queue worker.** `QUEUE_CONNECTION=database`, and the
+  scheduler (`routes/console.php`) runs `queue:work --stop-when-empty` every
+  minute plus `importgestionali:prune-files` daily — but only if a single cPanel
+  cron drives it:
+
+  ```
+  * * * * * cd ~/apps/pim && php artisan schedule:run >> /dev/null 2>&1
+  ```
+
+  Without that cron, queued jobs never run: a large ImportGestionali import
+  (> 300 rows) stays `pending`, while smaller ones still work because they run
+  inline. See *ImportGestionali module → Scheduling*.
 
 Deploy pull:
 
