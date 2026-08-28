@@ -199,13 +199,17 @@ module.json                                  # name, alias, service providers
 | `external_id` | string | nullable |
 | `status` | string | default `draft` (`draft` / `active` / `archived` in the UI) |
 | `stock` | int | nullable, default 0; `null` for `variable` rows |
+| `weight` | decimal(8,3) | nullable — kg; `null` for `variable` rows |
+| `length` / `width` / `height` | decimal(8,2) | nullable — cm; `null` for `variable` rows |
 | `created_at` / `updated_at` | timestamp | |
 
-Mass-assignable: `type`, `parent_id`, `sku`, `external_id`, `status`, `stock`.
-Translatable content (`name`, `description`) lives in the Localization module —
-see below. A `saving` guard (`CannotChangeProductType`) keeps the
-type/`parent_id` shape consistent and blocks turning a variable that still has
-variants into another type.
+Mass-assignable: `type`, `parent_id`, `sku`, `external_id`, `status`, `stock`,
+`weight`, `length`, `width`, `height`. Translatable content (`name`,
+`description`) lives in the Localization module — see below. A `saving` guard
+(`CannotChangeProductType`) keeps the type/`parent_id` shape consistent and
+blocks turning a variable that still has variants into another type; the same
+`saving` hook nulls `stock` **and the four dimension columns** on a `variable`
+row, since a container carries neither its own stock nor its own dimensions.
 
 ### Admin routes
 
@@ -225,17 +229,18 @@ inherits Pricing, translations, taxonomy terms and everything else for free.
 | Type | Role |
 |---|---|
 | `simple` | independent product; behaviour unchanged |
-| `variable` | container: shared name/description/common terms, **no own price or stock** (those fields are hidden in the form) |
-| `variant` | child of a variable: own SKU, own translations (seeded from the parent), own per-list prices, own stock, own distinguishing terms |
+| `variable` | container: shared name/description/common terms, **no own price, stock or dimensions** (those fields are hidden in the form) |
+| `variant` | child of a variable: own SKU, own translations (seeded from the parent), own per-list prices, own stock, own weight/dimensions, own distinguishing terms |
 
 - **List** (`/admin/products`): top-level rows only (`whereNull('parent_id')`);
   a variable shows a "*N* variants" count. Filters: **type**, **status**,
   **missing translation** (per language), **taxonomy** (faceted — AND across
   taxonomies, OR within one, each term expanded to its subtree), **price**
   (presence + min/max on a chosen list) and **stock** (out-of-stock / low, the
-  threshold from `products.low_stock_threshold`); the Stock column is toggleable.
-  **Saved views** (see *SavedViews module*) snapshot the active filters plus the
-  column-manager state under `resource: "products"`.
+  threshold from `products.low_stock_threshold`). The **stock**, **weight** and
+  **length / width / height** columns are toggleable (the dimension ones hidden
+  by default). **Saved views** (see *SavedViews module*) snapshot the active
+  filters plus the column-manager state under `resource: "products"`.
 - **Variants are managed inside the parent**: `VariantsRelationManager` (visible
   only for `variable`) — an inline table (SKU / stock editable in place), a full
   variant edit form, and **Generate variants**: a wizard that takes the chosen

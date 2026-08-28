@@ -30,6 +30,19 @@ class ProductFactory extends Factory
         return $this->state(fn (): array => ['status' => 'active']);
     }
 
+    /**
+     * Give the product a full set of shipping dimensions (kg / cm).
+     */
+    public function withDimensions(): static
+    {
+        return $this->state(fn (): array => [
+            'weight' => 0.750,
+            'length' => 30,
+            'width' => 20,
+            'height' => 10,
+        ]);
+    }
+
     public function archived(): static
     {
         return $this->state(fn (): array => ['status' => 'archived']);

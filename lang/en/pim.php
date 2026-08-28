@@ -56,6 +56,10 @@ return [
         'search' => 'Search',
         'columns' => 'Columns',
         'base_suffix' => ' — base',
+        'weight' => 'Weight',
+        'length' => 'Length',
+        'width' => 'Width',
+        'height' => 'Height',
     ],
 
     'option' => [
@@ -114,6 +118,7 @@ return [
     'section' => [
         'populate_prices' => 'Populate prices from another list',
         'populate_prices_hint' => 'Optional. Copies every price from the chosen list into the new one, applying a percentage change.',
+        'dimensions' => 'Dimensions & weight',
     ],
 
     'helper' => [

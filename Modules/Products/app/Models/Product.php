@@ -29,6 +29,10 @@ class Product extends Model
         'external_id',
         'status',
         'stock',
+        'weight',
+        'length',
+        'width',
+        'height',
     ];
 
     protected function casts(): array
@@ -36,17 +40,26 @@ class Product extends Model
         return [
             'type' => ProductType::class,
             'stock' => 'integer',
+            'weight' => 'decimal:3',
+            'length' => 'decimal:2',
+            'width' => 'decimal:2',
+            'height' => 'decimal:2',
         ];
     }
 
     protected static function booted(): void
     {
         // Backstop for every write path (Filament, tinker, seeders, future API):
-        // a variable product never carries its own stock, and the
-        // simple / variable / variant shape stays internally consistent.
+        // a variable product never carries its own stock or shipping
+        // dimensions, and the simple / variable / variant shape stays
+        // internally consistent.
         static::saving(function (Product $product): void {
             if ($product->type === ProductType::Variable) {
                 $product->stock = null;
+                $product->weight = null;
+                $product->length = null;
+                $product->width = null;
+                $product->height = null;
             }
 
             $product->assertConsistentType();

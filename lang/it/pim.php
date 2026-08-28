@@ -56,6 +56,10 @@ return [
         'search' => 'Cerca',
         'columns' => 'Colonne',
         'base_suffix' => ' — base',
+        'weight' => 'Peso',
+        'length' => 'Lunghezza',
+        'width' => 'Larghezza',
+        'height' => 'Altezza',
     ],
 
     'option' => [
@@ -114,6 +118,7 @@ return [
     'section' => [
         'populate_prices' => 'Popola i prezzi da un altro listino',
         'populate_prices_hint' => 'Opzionale. Copia tutti i prezzi dal listino scelto nel nuovo, applicando una variazione percentuale.',
+        'dimensions' => 'Dimensioni e peso',
     ],
 
     'helper' => [

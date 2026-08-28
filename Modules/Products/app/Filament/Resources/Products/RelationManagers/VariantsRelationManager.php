@@ -16,6 +16,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
@@ -90,6 +91,31 @@ class VariantsRelationManager extends RelationManager
                 ->numeric()
                 ->minValue(0)
                 ->default(0),
+            Section::make(__('pim.section.dimensions'))
+                ->columns(2)
+                ->columnSpanFull()
+                ->schema([
+                    TextInput::make('weight')
+                        ->label(__('pim.field.weight'))
+                        ->numeric()
+                        ->minValue(0)
+                        ->suffix('kg'),
+                    TextInput::make('length')
+                        ->label(__('pim.field.length'))
+                        ->numeric()
+                        ->minValue(0)
+                        ->suffix('cm'),
+                    TextInput::make('width')
+                        ->label(__('pim.field.width'))
+                        ->numeric()
+                        ->minValue(0)
+                        ->suffix('cm'),
+                    TextInput::make('height')
+                        ->label(__('pim.field.height'))
+                        ->numeric()
+                        ->minValue(0)
+                        ->suffix('cm'),
+                ]),
             Select::make('taxonomyTerms')
                 ->label(__('pim.field.taxonomy_terms'))
                 ->relationship('taxonomyTerms', 'name', fn (Builder $query): Builder => $query->with('taxonomy'))
