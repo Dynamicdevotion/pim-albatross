@@ -63,6 +63,12 @@ class ImportRunner
                     $issues[] = ['line' => $outcome->line, 'reason' => $outcome->reason];
                 }
 
+                foreach ($outcome->warnings as $warning) {
+                    if (count($issues) < $cap) {
+                        $issues[] = ['line' => $outcome->line, 'reason' => $warning];
+                    }
+                }
+
                 if ((($created + $updated + $skipped) % 200) === 0) {
                     $record->update([
                         'created_count' => $created,

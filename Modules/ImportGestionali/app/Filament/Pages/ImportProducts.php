@@ -327,15 +327,17 @@ class ImportProducts extends Page
         $originalName = $this->originalName
             ?? ($this->data['file_original_names'][$this->storedPath] ?? basename($this->storedPath));
 
+        $mapping = collect($this->data['mapping'] ?? [])
+            ->map(fn ($value) => $value === '' ? null : $value)
+            ->all();
+
         $record = ImportRecord::create([
             'user_id' => auth()->id(),
             'original_filename' => $originalName,
             'stored_path' => $this->storedPath,
             'status' => 'pending',
             'update_existing' => (bool) ($this->data['update_existing'] ?? false),
-            'mapping' => collect($this->data['mapping'] ?? [])
-                ->map(fn ($value) => $value === '' ? null : $value)
-                ->all(),
+            'mapping' => $mapping,
             'meta' => [
                 'header' => $this->fileHeader,
                 'delimiter' => $this->delimiter,
@@ -344,9 +346,12 @@ class ImportProducts extends Page
             'total_rows' => $this->totalRows,
         ]);
 
+        // An image column means one HTTP download per row — always off the
+        // request, regardless of row count.
+        $hasImages = (bool) array_intersect(['image_url', 'gallery_urls'], $mapping);
         $inlineMax = (int) config('importgestionali.inline_max_rows', 300);
 
-        if (($this->totalRows ?? PHP_INT_MAX) <= $inlineMax) {
+        if (! $hasImages && ($this->totalRows ?? PHP_INT_MAX) <= $inlineMax) {
             app(ImportRunner::class)->run($record);
             Notification::make()->success()->title(__('pim.import.notify.done'))->send();
         } else {

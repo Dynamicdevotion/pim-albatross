@@ -145,4 +145,21 @@ class ImportProductsPageTest extends TestCase
         $this->assertSame([], $page->fileHeader);
         $this->assertNull($page->storedPath);
     }
+
+    public function test_mapping_an_image_column_forces_the_queue_even_for_a_tiny_file(): void
+    {
+        Queue::fake();
+
+        Livewire::test(ImportProducts::class)
+            ->set('data.file', UploadedFile::fake()->createWithContent(
+                'gioielli.csv',
+                "Codice;Nome;Foto\nAN-1;Anello;https://cdn.example/an.jpg\n",
+            ))
+            ->set('data.mapping', [0 => 'sku', 1 => 'name', 2 => 'image_url'])
+            ->call('import')
+            ->assertRedirect();
+
+        Queue::assertPushed(RunProductImport::class);
+        $this->assertSame('pending', ImportRecord::sole()->status);
+    }
 }

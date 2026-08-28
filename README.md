@@ -502,7 +502,7 @@ app/
 │   ├── ImportGestionaliPanelPlugin.php       # discoverPages + discoverResources
 │   ├── Pages/ImportProducts.php              # the 3-step wizard
 │   └── Resources/ImportRecords/              # read-only run history + report page
-├── Enums/TargetField.php                     # sku / name / description / price / stock / weight / length / width / height / status
+├── Enums/TargetField.php                     # sku / name / description / price / stock / weight / length / width / height / status / image_url / gallery_urls
 ├── Jobs/RunProductImport.php                 # queued run for large files
 ├── Models/ImportRecord.php                   # one import run + its outcome
 ├── Console/PruneImportFilesCommand.php       # importgestionali:prune-files
@@ -512,9 +512,11 @@ app/
     ├── RowMapper.php                         # mapping + positional row → [field => value]
     ├── ProductRowImporter.php                # one row → created | updated | skipped(reason); dryRun
     ├── ImportRunner.php                      # stream the file, keep the report current
-    ├── RowOutcome.php  /  FileShape.php      # small value objects
+    ├── ImageFetcher.php                      # download an image_url / gallery_urls entry (streamed, capped)
+    ├── RowOutcome.php  /  FileShape.php  /  FetchedImage.php   # small value objects
+    ├── ImageFetchException.php               # per-image failure → a report note, not a skip
     └── UnreadableImportFile.php              # translated, user-safe file-level failure
-config/config.php                             # inline_max_rows, max_file_mb, issues_cap, preview_rows, disk, prune_days
+config/config.php                             # inline_max_rows, max_file_mb, issues_cap, preview_rows, disk, prune_days, image_timeout
 database/migrations/2026_08_28_100000_create_import_records_table.php
 ```
 
@@ -534,12 +536,15 @@ database/migrations/2026_08_28_100000_create_import_records_table.php
    outcome (*will be created* / *will update the existing one* / *skipped —
    reason*). Same code path as the real import, so the preview matches.
 
-**Confirm** creates an `ImportRecord` and then, by row count:
+**Confirm** creates an `ImportRecord` and then decides inline vs queued:
 
-| Rows | |
+| | |
 |---|---|
-| ≤ `inline_max_rows` (300) | runs inline in the confirm request; redirects to a finished report |
-| > 300 | `RunProductImport` is queued; the report page polls (`wire:poll`) until done |
+| ≤ `inline_max_rows` (300) rows **and** no image column mapped | runs inline in the confirm request; redirects to a finished report |
+| > 300 rows **or** an image column mapped | `RunProductImport` is queued; the report page polls (`wire:poll`) until done |
+
+An image column means one HTTP download per row, so it always goes to the queue
+regardless of size.
 
 ### Matching and the "update existing" toggle
 
@@ -555,6 +560,23 @@ Value parsing: numbers accept both `1.234,56` and `1234.56` and a trailing
 through the Localization module; `price` is written to the default price list
 via `ProductPriceMatrix`.
 
+### Images (`image_url` / `gallery_urls`)
+
+Both columns hold **URLs**. `image_url` is a single URL → the `main_image`
+collection; `gallery_urls` is a **`|`-separated** list → the `gallery`
+collection, in order. `ImageFetcher` downloads each one (streamed, capped at
+`media-library.max_file_size`, timeout `image_timeout` = 15 s, content sniffed
+to jpg/png/webp, obvious private/loopback hosts refused) and hands it to Spatie
+Media Library on the `Product` — the same collections the product form uses.
+
+- **Best-effort**: a URL that will not download does **not** skip the row. The
+  product still imports; the failure is a line in the report (*"riga 34:
+  immagine principale — download fallito (HTTP 404)"*, *"riga 52: galleria —
+  2/3 immagini importate (1 non scaricate)"*).
+- **Update semantics** match the other fields: a non-empty cell **replaces** the
+  whole collection; an empty or unmapped cell leaves it untouched.
+- The preview never downloads anything (`dryRun`).
+
 ### File-level failures vs row-level problems
 
 **File-level** (raised as one translated `UnreadableImportFile`, shown at the
@@ -567,16 +589,18 @@ relevant wizard step, nothing is imported):
 - legacy `.xls` (Excel 97-2003) — openspout cannot read it ("save as .xlsx or .csv");
 - at the mapping step: no column mapped to SKU.
 
-**Row-level** (the run continues; each is one line in the report): SKU missing,
-SKU duplicated within the file, SKU already exists (toggle off), name missing on
-a new product, a numeric field that is not a number or is negative, stock not a
-whole number, an unrecognised `status`.
+**Row-level** (the run continues; each is one line in the report). Two kinds:
+a **skip** (the whole row is not imported) — SKU missing, SKU duplicated within
+the file, SKU already exists (toggle off), name missing on a new product, a
+numeric field that is not a number or is negative, stock not a whole number, an
+unrecognised `status`; or a **note** on a row that *was* imported — an image URL
+that would not download.
 
 ### Report
 
 `ImportRecordResource` ("Esiti import", read-only — no create/edit): a list of
 past runs, and a **View** page with the created / updated / skipped counts, the
-run timing, and the plain-language list of skipped rows
+run timing, and the plain-language list of problem rows
 (`import_records.issues`, capped at `issues_cap` = 500, then "…and N more").
 
 ### `import_records` table

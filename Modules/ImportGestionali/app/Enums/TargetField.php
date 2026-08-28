@@ -18,6 +18,8 @@ enum TargetField: string
     case Width = 'width';
     case Height = 'height';
     case Status = 'status';
+    case ImageUrl = 'image_url';
+    case GalleryUrls = 'gallery_urls';
 
     public function label(): string
     {

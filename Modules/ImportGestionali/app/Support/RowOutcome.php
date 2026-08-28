@@ -4,6 +4,10 @@ namespace Modules\ImportGestionali\Support;
 
 /**
  * What happened (or, in a dry run, what would happen) to a single row.
+ *
+ * `warnings` holds non-fatal notes for a row that was still imported — an
+ * image URL that would not download, say. They land in the report next to
+ * the real skips.
  */
 final readonly class RowOutcome
 {
@@ -13,20 +17,30 @@ final readonly class RowOutcome
 
     public const SKIPPED = 'skipped';
 
+    /**
+     * @param  list<string>  $warnings
+     */
     private function __construct(
         public string $action,
         public int $line,
         public ?string $reason = null,
+        public array $warnings = [],
     ) {}
 
-    public static function created(int $line): self
+    /**
+     * @param  list<string>  $warnings
+     */
+    public static function created(int $line, array $warnings = []): self
     {
-        return new self(self::CREATED, $line);
+        return new self(self::CREATED, $line, null, $warnings);
     }
 
-    public static function updated(int $line): self
+    /**
+     * @param  list<string>  $warnings
+     */
+    public static function updated(int $line, array $warnings = []): self
     {
-        return new self(self::UPDATED, $line);
+        return new self(self::UPDATED, $line, null, $warnings);
     }
 
     public static function skipped(int $line, string $reason): self

@@ -3,6 +3,7 @@
 namespace Modules\ImportGestionali\Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Modules\ImportGestionali\Models\ImportRecord;
 use Modules\ImportGestionali\Support\ImportRunner;
@@ -106,6 +107,25 @@ class ImportRunnerTest extends TestCase
         $this->assertSame(1, $record->updated_count);
         $this->assertSame(0, $record->created_count);
         $this->assertSame(42, Product::where('sku', 'U1')->sole()->stock);
+    }
+
+    public function test_an_undownloadable_image_is_reported_without_skipping_the_row(): void
+    {
+        Storage::fake('public');
+        Http::fake(['*' => Http::response('nope', 404)]);
+
+        $record = $this->record(
+            "Codice;Nome;Foto\nGIO-1;Anello;https://cdn.example/an.jpg\n",
+            [0 => 'sku', 1 => 'name', 2 => 'image_url'],
+        );
+
+        app(ImportRunner::class)->run($record);
+        $record->refresh();
+
+        $this->assertSame('completed', $record->status);
+        $this->assertSame(1, $record->created_count);
+        $this->assertSame(0, $record->skipped_count);
+        $this->assertStringContainsString('immagine principale', $record->issues[0]['reason']);
     }
 
     public function test_a_vanished_file_fails_the_run_cleanly(): void

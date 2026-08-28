@@ -97,7 +97,7 @@ final class ProductRowImporter
             return $existing !== null ? RowOutcome::updated($line) : RowOutcome::created($line);
         }
 
-        DB::transaction(function () use ($existing, $sku, $stock, $weight, $length, $width, $height, $status, $name, $description, $price): void {
+        $product = DB::transaction(function () use ($existing, $sku, $stock, $weight, $length, $width, $height, $status, $name, $description, $price): Product {
             $product = $existing ?? new Product(['type' => ProductType::Simple->value]);
             $product->sku = $sku;
 
@@ -142,9 +142,85 @@ final class ProductRowImporter
                     'price' => $price,
                 ]]);
             }
+
+            return $product;
         });
 
-        return $existing !== null ? RowOutcome::updated($line) : RowOutcome::created($line);
+        // Images are fetched over HTTP, outside the row transaction, and never
+        // skip the product: a failed download is a report note.
+        $warnings = [];
+        $this->syncMainImage($product, trim($mapped['image_url'] ?? ''), $line, $warnings);
+        $this->syncGallery($product, trim($mapped['gallery_urls'] ?? ''), $line, $warnings);
+
+        return $existing !== null
+            ? RowOutcome::updated($line, $warnings)
+            : RowOutcome::created($line, $warnings);
+    }
+
+    /**
+     * @param  list<string>  $warnings
+     */
+    private function syncMainImage(Product $product, string $url, int $line, array &$warnings): void
+    {
+        if ($url === '') {
+            return;
+        }
+
+        try {
+            $image = ImageFetcher::make()->fetch($url);
+        } catch (ImageFetchException $e) {
+            $warnings[] = __('pim.import.issue.image_main', ['line' => $line, 'detail' => $e->getMessage()]);
+
+            return;
+        }
+
+        $product->clearMediaCollection('main_image');
+        $product->addMediaFromString($image->bytes)
+            ->usingFileName($image->filename)
+            ->toMediaCollection('main_image', 'public');
+    }
+
+    /**
+     * @param  list<string>  $warnings
+     */
+    private function syncGallery(Product $product, string $raw, int $line, array &$warnings): void
+    {
+        if ($raw === '') {
+            return;
+        }
+
+        $urls = array_values(array_filter(array_map('trim', explode('|', $raw)), fn (string $u): bool => $u !== ''));
+
+        if ($urls === []) {
+            return;
+        }
+
+        $fetcher = ImageFetcher::make();
+        $product->clearMediaCollection('gallery');
+        $failed = [];
+
+        foreach ($urls as $url) {
+            try {
+                $image = $fetcher->fetch($url);
+            } catch (ImageFetchException $e) {
+                $failed[] = $e->getMessage();
+
+                continue;
+            }
+
+            $product->addMediaFromString($image->bytes)
+                ->usingFileName($image->filename)
+                ->toMediaCollection('gallery', 'public');
+        }
+
+        if ($failed !== []) {
+            $warnings[] = __('pim.import.issue.image_gallery', [
+                'line' => $line,
+                'ok' => count($urls) - count($failed),
+                'total' => count($urls),
+                'failed' => count($failed),
+            ]);
+        }
     }
 
     /**

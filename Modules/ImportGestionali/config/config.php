@@ -37,4 +37,10 @@ return [
      * `importgestionali:prune-files`.
      */
     'prune_days' => (int) env('IMPORT_PRUNE_DAYS', 7),
+
+    /*
+     * Per-image HTTP timeout (seconds) when downloading from an `image_url` /
+     * `gallery_urls` column. The size cap is `media-library.max_file_size`.
+     */
+    'image_timeout' => (int) env('IMPORT_IMAGE_TIMEOUT', 15),
 ];
