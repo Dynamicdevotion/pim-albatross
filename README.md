@@ -678,6 +678,11 @@ composer dump-autoload && php artisan optimize:clear
 `--resource-namespace` is ignored when a single panel exists, so the generator
 always writes into the app panel namespace — hence the manual move.
 
+On the server the panel is cached, so after deploying a new module or resource
+run `php artisan filament:optimize-clear` (or the full `php artisan optimize`) —
+without it the new pages/resources get no route and no menu entry. See
+*Deployment*.
+
 ---
 
 ## Deployment (Netsons shared hosting)
@@ -726,10 +731,17 @@ commands run against the fresh config, then rebuild the caches with `optimize`
 as the **last** step, after `migrate`.
 
 `php artisan optimize` writes the production caches to `bootstrap/cache/`
-(`config.php`, `routes-v7.php`, `events.php`, `blade-icons.php`). Because config
-and routes are then frozen, **re-run `php artisan optimize` after any change to
-`.env`, `config/*`, or the route files** — otherwise the change is not picked up.
-Use `php artisan optimize:clear` to drop all caches (e.g. when debugging).
+(`config.php`, `routes-v7.php`, `events.php`, `blade-icons.php`) and the Filament
+panel to `bootstrap/cache/filament/panels/admin.php`. Because config, routes and
+the panel's discovered pages/resources are then frozen, **re-run `php artisan
+optimize` after any change to `.env`, `config/*` or the route files — and after
+adding a module, page or resource to the panel**, otherwise the change is not
+picked up. A stale panel cache is easy to miss: it leaves a new module's pages
+and resources with **no route and no navigation entry** even though its plugin is
+correctly listed in `->plugins([...])` (the page is still reachable from a
+`Livewire::test()`, which bypasses panel routing). Use `php artisan
+optimize:clear` to drop all caches (e.g. when debugging), or `php artisan
+filament:optimize-clear` for just the panel cache.
 
 For `route:cache` to succeed, route files must not use Closure handlers — use
 `Route::view()` / controllers instead (the `/` route already does).
