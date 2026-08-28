@@ -229,7 +229,13 @@ inherits Pricing, translations, taxonomy terms and everything else for free.
 | `variant` | child of a variable: own SKU, own translations (seeded from the parent), own per-list prices, own stock, own distinguishing terms |
 
 - **List** (`/admin/products`): top-level rows only (`whereNull('parent_id')`);
-  a variable shows a "*N* variants" count and there is a Type filter.
+  a variable shows a "*N* variants" count. Filters: **type**, **status**,
+  **missing translation** (per language), **taxonomy** (faceted — AND across
+  taxonomies, OR within one, each term expanded to its subtree), **price**
+  (presence + min/max on a chosen list) and **stock** (out-of-stock / low, the
+  threshold from `products.low_stock_threshold`); the Stock column is toggleable.
+  **Saved views** (see *SavedViews module*) snapshot the active filters plus the
+  column-manager state under `resource: "products"`.
 - **Variants are managed inside the parent**: `VariantsRelationManager` (visible
   only for `variable`) — an inline table (SKU / stock editable in place), a full
   variant edit form, and **Generate variants**: a wizard that takes the chosen
@@ -426,9 +432,10 @@ Reusable per-user snapshots of a screen's filters + visible columns.
   `savedViewResourceKey()`, `captureViewState()`, `applyViewState()`; the trait
   adds a `savedViewId` property, the per-user option list, an
   `updatedSavedViewId` hook that restores state, and Save / Update / Delete
-  Filament actions. Applied to the price grid (`resource: "pricing.prices"`);
-  reusable on the resource list pages later by snapshotting `tableFilters` and
-  `toggledTableColumns`. No panel plugin — model + trait only.
+  Filament actions. Applied to the price grid (`resource: "pricing.prices"`) and
+  to the **product list** (`resource: "products"`, `ListProducts` snapshotting
+  `tableFilters` + the column-manager `tableColumns` state). No panel plugin —
+  model + trait only.
 
 ---
 
