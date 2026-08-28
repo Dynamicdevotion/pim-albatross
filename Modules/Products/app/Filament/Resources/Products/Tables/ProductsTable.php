@@ -38,7 +38,8 @@ class ProductsTable
                 ImageColumn::make('main_image')
                     ->label(__('pim.field.image'))
                     ->getStateUsing(fn (Product $record): ?string => $record->getMainImageUrl('thumb'))
-                    ->imageHeight(40)
+                    ->imageSize(40)
+                    ->square()
                     ->defaultImageUrl(fn (): string => asset('images/placeholder-product.svg')),
                 TextColumn::make('name_base')
                     ->label(__('pim.field.name'))

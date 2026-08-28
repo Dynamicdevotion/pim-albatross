@@ -41,6 +41,21 @@ class ProductMediaTest extends TestCase
         $this->assertSame('second', $media->first()->name);
     }
 
+    public function test_thumb_conversion_is_a_filled_300_square(): void
+    {
+        $product = Product::factory()->create();
+        $product->addMedia(UploadedFile::fake()->image('tall.jpg', 600, 900))
+            ->toMediaCollection('main_image');
+
+        $media = $product->fresh()->getFirstMedia('main_image');
+
+        $this->assertTrue($media->hasGeneratedConversion('thumb'));
+        $this->assertSame(
+            [300, 300],
+            array_slice(getimagesize($media->getPath('thumb')), 0, 2),
+        );
+    }
+
     public function test_gallery_collection_accepts_several_images_in_order(): void
     {
         $product = Product::factory()->create();

@@ -133,9 +133,11 @@ class Product extends Model implements HasMedia
     public function registerMediaConversions(?Media $media = null): void
     {
         // Generated synchronously on upload: the shared host runs no queue
-        // worker, so a queued conversion would never be built.
+        // worker, so a queued conversion would never be built. Fit::Crop
+        // fills a true 300x300 square (centre crop) — a uniform tile for the
+        // list column and the form's grid previews, not a letterboxed image.
         $this->addMediaConversion('thumb')
-            ->fit(Fit::Contain, 300, 300)
+            ->fit(Fit::Crop, 300, 300)
             ->nonQueued();
     }
 

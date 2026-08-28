@@ -266,10 +266,10 @@ one shown in the list):
 
 Both accept **jpg / png / webp only** (`Product::IMAGE_MIME_TYPES`), max **5 MB**
 per file (`config('media-library.max_file_size')` and the Filament fields both
-enforce it). A `thumb` conversion (`Fit::Contain`, 300×300) is generated
-**synchronously** on upload — `queue_conversions_by_default` is `false` and the
-conversion is `->nonQueued()`, because the shared Netsons host runs no queue
-worker.
+enforce it). A `thumb` conversion (`Fit::Crop`, 300×300 — a centre-cropped
+filled square, not letterboxed) is generated **synchronously** on upload —
+`queue_conversions_by_default` is `false` and the conversion is `->nonQueued()`,
+because the shared Netsons host runs no queue worker.
 
 **Inheritance.** `Product::getMainImageUrl($conversion = '')` returns the
 product's own main image, or — for a `variant` with none of its own — its
@@ -288,12 +288,15 @@ files would land in the non-public `storage/app/private`.
 **Filament.**
 - `ProductForm` and the variant form (`VariantsRelationManager`) carry an
   *Immagini* section: a single-file `main_image` upload (with image editor) and
-  a multiple, reorderable `gallery` upload, via
-  `SpatieMediaLibraryFileUpload`.
+  a multiple, reorderable `gallery` upload, via `SpatieMediaLibraryFileUpload`.
+  Both use `panelLayout('grid')` with `conversion('thumb')` — a compact square
+  mosaic of cropped previews (3 columns from `lg`, 2 below), capped at 30rem
+  wide.
 - `ProductsTable` and the variant table show a fixed **thumbnail column**
-  (`ImageColumn` over `getMainImageUrl('thumb')`, so a variant with no image of
-  its own shows the parent's). It is **not** toggleable — always visible.
-  `public/images/placeholder-product.svg` is the fallback when there is no image.
+  (`ImageColumn` over `getMainImageUrl('thumb')`, `imageSize(40)->square()`, so
+  a variant with no image of its own shows the parent's — same crop). It is
+  **not** toggleable — always visible. `public/images/placeholder-product.svg`
+  is the fallback when there is no image.
 
 ---
 
