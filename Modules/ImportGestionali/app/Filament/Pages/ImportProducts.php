@@ -248,7 +248,7 @@ class ImportProducts extends Page
         return [
             Section::make(__('pim.import.step.map'))
                 ->description(__('pim.import.help.map'))
-                ->columns(2)
+                ->columns(1)
                 ->schema($selects),
             Toggle::make('update_existing')
                 ->label(__('pim.import.field.update_existing'))
