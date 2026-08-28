@@ -23,6 +23,7 @@ class ProductMediaTest extends TestCase
         parent::setUp();
 
         Storage::fake('public');
+        Storage::fake('local');
         $this->seed(LanguageSeeder::class);
         $this->actingAs(User::factory()->create());
         Filament::setCurrentPanel(Filament::getPanel('admin'));
@@ -84,6 +85,26 @@ class ProductMediaTest extends TestCase
     {
         $this->assertNull(Product::factory()->create()->getMainImageUrl());
         $this->assertNull(Product::factory()->variantOf(Product::factory()->variable()->create())->create()->getMainImageUrl());
+    }
+
+    public function test_form_upload_stores_media_on_the_public_disk(): void
+    {
+        Livewire::test(CreateProduct::class)
+            ->fillForm([
+                'type' => 'simple',
+                'sku' => 'DISK-1',
+                'status' => 'draft',
+                'translations' => ['it' => ['name' => 'X']],
+                'main_image' => [UploadedFile::fake()->image('a.jpg', 300, 300)],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $media = Product::where('sku', 'DISK-1')->sole()->getFirstMedia('main_image');
+
+        $this->assertNotNull($media);
+        $this->assertSame('public', $media->disk);
+        Storage::disk('public')->assertExists($media->getPathRelativeToRoot());
     }
 
     public function test_the_form_rejects_a_non_image_file(): void

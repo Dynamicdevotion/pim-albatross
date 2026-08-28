@@ -143,23 +143,21 @@ class Product extends Model implements HasMedia
      * URL of this product's main image. A variant with no image of its own
      * falls back to its parent's — the same "own value, then parent" rule
      * used elsewhere for variant names and SKUs. Returns null when neither
-     * has one.
+     * has one; falls back to the original file when the requested conversion
+     * has not been generated.
      */
     public function getMainImageUrl(string $conversion = ''): ?string
     {
-        $own = $this->getFirstMediaUrl('main_image', $conversion);
+        $media = $this->getFirstMedia('main_image')
+            ?? ($this->isVariant() ? $this->parent?->getFirstMedia('main_image') : null);
 
-        if ($own !== '') {
-            return $own;
+        if ($media === null) {
+            return null;
         }
 
-        if ($this->isVariant()) {
-            $inherited = $this->parent?->getFirstMediaUrl('main_image', $conversion);
-
-            return ($inherited ?? '') !== '' ? $inherited : null;
-        }
-
-        return null;
+        return ($conversion !== '' && $media->hasGeneratedConversion($conversion))
+            ? $media->getUrl($conversion)
+            : $media->getUrl();
     }
 
     // ---- type helpers ---------------------------------------------------

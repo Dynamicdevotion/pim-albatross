@@ -280,7 +280,10 @@ names and SKUs.
 `storage/app/public/<media_id>/<file>` and are served through the existing
 `public/storage` symlink at `APP_URL/storage/<media_id>/<file>` — verified
 working on Netsons (the web server follows the owner-matched symlink).
-Uploaded media is outside the repo (`storage/app/public/.gitignore`).
+Uploaded media is outside the repo (`storage/app/public/.gitignore`). The
+Filament upload fields pin `->disk('public')` explicitly: without it the
+component would use `filament.default_filesystem_disk` (`local` here) and the
+files would land in the non-public `storage/app/private`.
 
 **Filament.**
 - `ProductForm` and the variant form (`VariantsRelationManager`) carry an
