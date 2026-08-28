@@ -60,6 +60,9 @@ return [
         'length' => 'Lunghezza',
         'width' => 'Larghezza',
         'height' => 'Altezza',
+        'image' => 'Immagine',
+        'main_image' => 'Immagine principale',
+        'gallery' => 'Galleria',
     ],
 
     'option' => [
@@ -119,6 +122,7 @@ return [
         'populate_prices' => 'Popola i prezzi da un altro listino',
         'populate_prices_hint' => 'Opzionale. Copia tutti i prezzi dal listino scelto nel nuovo, applicando una variazione percentuale.',
         'dimensions' => 'Dimensioni e peso',
+        'media' => 'Immagini',
     ],
 
     'helper' => [
@@ -130,6 +134,7 @@ return [
         'variant_sku' => 'Proposto — modificabile prima di generare.',
         'generate_variants' => 'Scegli quali tassonomie definiscono le varianti e quali valori combinare. Viene creata una variante per ogni combinazione.',
         'variable_no_price' => 'Un prodotto variabile raggruppa le sue varianti; prezzo e giacenza sono su ciascuna variante.',
+        'variant_main_image' => 'Se vuota, la variante mostra l\'immagine principale del prodotto padre.',
     ],
 
     'modal' => [

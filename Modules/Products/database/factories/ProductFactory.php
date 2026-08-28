@@ -3,6 +3,7 @@
 namespace Modules\Products\Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Http\UploadedFile;
 use Modules\Products\Enums\ProductType;
 use Modules\Products\Models\Product;
 
@@ -69,5 +70,17 @@ class ProductFactory extends Factory
             'parent_id' => $parent->getKey(),
             'stock' => 0,
         ]);
+    }
+
+    /**
+     * Attach a fake main image after creation. Intended for tests, which run
+     * with `Storage::fake('public')`.
+     */
+    public function withMainImage(): static
+    {
+        return $this->afterCreating(function (Product $product): void {
+            $product->addMedia(UploadedFile::fake()->image('main.jpg', 400, 400))
+                ->toMediaCollection('main_image');
+        });
     }
 }

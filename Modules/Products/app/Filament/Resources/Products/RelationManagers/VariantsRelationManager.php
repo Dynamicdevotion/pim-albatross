@@ -13,6 +13,7 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -22,6 +23,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Components\Wizard\Step;
 use Filament\Schemas\Schema;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Table;
@@ -116,6 +118,28 @@ class VariantsRelationManager extends RelationManager
                         ->minValue(0)
                         ->suffix('cm'),
                 ]),
+            Section::make(__('pim.section.media'))
+                ->columnSpanFull()
+                ->schema([
+                    SpatieMediaLibraryFileUpload::make('main_image')
+                        ->label(__('pim.field.main_image'))
+                        ->collection('main_image')
+                        ->image()
+                        ->imageEditor()
+                        ->acceptedFileTypes(Product::IMAGE_MIME_TYPES)
+                        ->maxSize(5120)
+                        ->helperText(__('pim.helper.variant_main_image')),
+                    SpatieMediaLibraryFileUpload::make('gallery')
+                        ->label(__('pim.field.gallery'))
+                        ->collection('gallery')
+                        ->image()
+                        ->multiple()
+                        ->reorderable()
+                        ->appendFiles()
+                        ->acceptedFileTypes(Product::IMAGE_MIME_TYPES)
+                        ->maxSize(5120)
+                        ->columnSpanFull(),
+                ]),
             Select::make('taxonomyTerms')
                 ->label(__('pim.field.taxonomy_terms'))
                 ->relationship('taxonomyTerms', 'name', fn (Builder $query): Builder => $query->with('taxonomy'))
@@ -135,8 +159,13 @@ class VariantsRelationManager extends RelationManager
 
         return $table
             ->recordTitleAttribute('sku')
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['translations', 'prices']))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['translations', 'prices', 'media', 'parent.media']))
             ->columns([
+                ImageColumn::make('main_image')
+                    ->label(__('pim.field.image'))
+                    ->getStateUsing(fn (Product $record): ?string => $record->getMainImageUrl('thumb'))
+                    ->imageHeight(40)
+                    ->defaultImageUrl(fn (): string => asset('images/placeholder-product.svg')),
                 TextColumn::make('name_base')
                     ->label(__('pim.field.name'))
                     ->getStateUsing(fn (Product $record): ?string => $record->translate(Locales::baseCode())?->name),

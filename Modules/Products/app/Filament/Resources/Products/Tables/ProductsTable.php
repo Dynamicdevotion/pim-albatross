@@ -9,6 +9,7 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -32,8 +33,13 @@ class ProductsTable
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->whereNull('parent_id')
                 ->withCount('variants')
-                ->with(['translations', 'taxonomyTerms.taxonomy']))
+                ->with(['translations', 'taxonomyTerms.taxonomy', 'media']))
             ->columns([
+                ImageColumn::make('main_image')
+                    ->label(__('pim.field.image'))
+                    ->getStateUsing(fn (Product $record): ?string => $record->getMainImageUrl('thumb'))
+                    ->imageHeight(40)
+                    ->defaultImageUrl(fn (): string => asset('images/placeholder-product.svg')),
                 TextColumn::make('name_base')
                     ->label(__('pim.field.name'))
                     ->getStateUsing(fn (Product $record): ?string => $record->translate(Locales::baseCode())?->name)

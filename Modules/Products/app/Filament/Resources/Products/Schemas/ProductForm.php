@@ -4,6 +4,7 @@ namespace Modules\Products\Filament\Resources\Products\Schemas;
 
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
@@ -90,6 +91,27 @@ class ProductForm
                             ->numeric()
                             ->minValue(0)
                             ->suffix('cm'),
+                    ]),
+                Section::make(__('pim.section.media'))
+                    ->columnSpanFull()
+                    ->schema([
+                        SpatieMediaLibraryFileUpload::make('main_image')
+                            ->label(__('pim.field.main_image'))
+                            ->collection('main_image')
+                            ->image()
+                            ->imageEditor()
+                            ->acceptedFileTypes(Product::IMAGE_MIME_TYPES)
+                            ->maxSize(5120),
+                        SpatieMediaLibraryFileUpload::make('gallery')
+                            ->label(__('pim.field.gallery'))
+                            ->collection('gallery')
+                            ->image()
+                            ->multiple()
+                            ->reorderable()
+                            ->appendFiles()
+                            ->acceptedFileTypes(Product::IMAGE_MIME_TYPES)
+                            ->maxSize(5120)
+                            ->columnSpanFull(),
                     ]),
                 Select::make('taxonomyTerms')
                     ->label(__('pim.field.taxonomy_terms'))

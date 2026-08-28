@@ -14,10 +14,20 @@ use Modules\Products\Database\Factories\ProductFactory;
 use Modules\Products\Enums\ProductType;
 use Modules\Products\Exceptions\CannotChangeProductType;
 use Modules\Taxonomies\Models\TaxonomyTerm;
+use Spatie\Image\Enums\Fit;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
-class Product extends Model
+class Product extends Model implements HasMedia
 {
     use HasFactory;
+    use InteractsWithMedia;
+
+    /**
+     * Image formats accepted for both media collections.
+     */
+    public const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
     /**
      * The attributes that are mass assignable.
@@ -106,6 +116,50 @@ class Product extends Model
     public function variants(): HasMany
     {
         return $this->hasMany(self::class, 'parent_id');
+    }
+
+    // ---- media --------------------------------------------------------
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('main_image')
+            ->singleFile()
+            ->acceptsMimeTypes(self::IMAGE_MIME_TYPES);
+
+        $this->addMediaCollection('gallery')
+            ->acceptsMimeTypes(self::IMAGE_MIME_TYPES);
+    }
+
+    public function registerMediaConversions(?Media $media = null): void
+    {
+        // Generated synchronously on upload: the shared host runs no queue
+        // worker, so a queued conversion would never be built.
+        $this->addMediaConversion('thumb')
+            ->fit(Fit::Contain, 300, 300)
+            ->nonQueued();
+    }
+
+    /**
+     * URL of this product's main image. A variant with no image of its own
+     * falls back to its parent's — the same "own value, then parent" rule
+     * used elsewhere for variant names and SKUs. Returns null when neither
+     * has one.
+     */
+    public function getMainImageUrl(string $conversion = ''): ?string
+    {
+        $own = $this->getFirstMediaUrl('main_image', $conversion);
+
+        if ($own !== '') {
+            return $own;
+        }
+
+        if ($this->isVariant()) {
+            $inherited = $this->parent?->getFirstMediaUrl('main_image', $conversion);
+
+            return ($inherited ?? '') !== '' ? $inherited : null;
+        }
+
+        return null;
     }
 
     // ---- type helpers ---------------------------------------------------

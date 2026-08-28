@@ -60,6 +60,9 @@ return [
         'length' => 'Length',
         'width' => 'Width',
         'height' => 'Height',
+        'image' => 'Image',
+        'main_image' => 'Main image',
+        'gallery' => 'Gallery',
     ],
 
     'option' => [
@@ -119,6 +122,7 @@ return [
         'populate_prices' => 'Populate prices from another list',
         'populate_prices_hint' => 'Optional. Copies every price from the chosen list into the new one, applying a percentage change.',
         'dimensions' => 'Dimensions & weight',
+        'media' => 'Images',
     ],
 
     'helper' => [
@@ -130,6 +134,7 @@ return [
         'variant_sku' => 'Proposed — editable before generating.',
         'generate_variants' => 'Pick which taxonomies define the variants and which of their values to combine. One variant is created per combination.',
         'variable_no_price' => 'A variable product groups its variants; price and stock live on each variant.',
+        'variant_main_image' => 'Left empty, the variant shows its parent product\'s main image.',
     ],
 
     'modal' => [

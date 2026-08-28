@@ -253,6 +253,45 @@ inherits Pricing, translations, taxonomy terms and everything else for free.
   filter is available. `Modules\Products\Support\VariantGenerator` holds the pure
   combination/SKU/translation-copy logic.
 
+### Images (media)
+
+`Product` is a **Spatie Media Library** `HasMedia` model with two collections,
+usable on every product type (a `variable` container included — its image is the
+one shown in the list):
+
+| Collection | Shape |
+|---|---|
+| `main_image` | `singleFile()` — a new upload replaces the previous one |
+| `gallery` | multiple, reorderable |
+
+Both accept **jpg / png / webp only** (`Product::IMAGE_MIME_TYPES`), max **5 MB**
+per file (`config('media-library.max_file_size')` and the Filament fields both
+enforce it). A `thumb` conversion (`Fit::Contain`, 300×300) is generated
+**synchronously** on upload — `queue_conversions_by_default` is `false` and the
+conversion is `->nonQueued()`, because the shared Netsons host runs no queue
+worker.
+
+**Inheritance.** `Product::getMainImageUrl($conversion = '')` returns the
+product's own main image, or — for a `variant` with none of its own — its
+parent's, or `null`. Same "own value, then parent" rule already used for variant
+names and SKUs.
+
+**Storage.** Files live on the `public` disk at
+`storage/app/public/<media_id>/<file>` and are served through the existing
+`public/storage` symlink at `APP_URL/storage/<media_id>/<file>` — verified
+working on Netsons (the web server follows the owner-matched symlink).
+Uploaded media is outside the repo (`storage/app/public/.gitignore`).
+
+**Filament.**
+- `ProductForm` and the variant form (`VariantsRelationManager`) carry an
+  *Immagini* section: a single-file `main_image` upload (with image editor) and
+  a multiple, reorderable `gallery` upload, via
+  `SpatieMediaLibraryFileUpload`.
+- `ProductsTable` and the variant table show a fixed **thumbnail column**
+  (`ImageColumn` over `getMainImageUrl('thumb')`, so a variant with no image of
+  its own shows the parent's). It is **not** toggleable — always visible.
+  `public/images/placeholder-product.svg` is the fallback when there is no image.
+
 ---
 
 ## Localization module
