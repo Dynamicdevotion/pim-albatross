@@ -489,6 +489,136 @@ Reusable per-user snapshots of a screen's filters + visible columns.
 
 ---
 
+## ImportGestionali module
+
+Imports **simple** products from a CSV / Excel export with a visual column
+mapping. First pass only — no variants, taxonomies or multi-list pricing.
+
+Structure (`Modules/ImportGestionali/`):
+
+```
+app/
+├── Filament/
+│   ├── ImportGestionaliPanelPlugin.php       # discoverPages + discoverResources
+│   ├── Pages/ImportProducts.php              # the 3-step wizard
+│   └── Resources/ImportRecords/              # read-only run history + report page
+├── Enums/TargetField.php                     # sku / name / description / price / stock / weight / length / width / height / status
+├── Jobs/RunProductImport.php                 # queued run for large files
+├── Models/ImportRecord.php                   # one import run + its outcome
+├── Console/PruneImportFilesCommand.php       # importgestionali:prune-files
+└── Support/
+    ├── SpreadsheetReader.php                 # openspout wrapper: sniff + stream
+    ├── FieldGuesser.php                      # header → field, it/en synonyms
+    ├── RowMapper.php                         # mapping + positional row → [field => value]
+    ├── ProductRowImporter.php                # one row → created | updated | skipped(reason); dryRun
+    ├── ImportRunner.php                      # stream the file, keep the report current
+    ├── RowOutcome.php  /  FileShape.php      # small value objects
+    └── UnreadableImportFile.php              # translated, user-safe file-level failure
+config/config.php                             # inline_max_rows, max_file_mb, issues_cap, preview_rows, disk, prune_days
+database/migrations/2026_08_28_100000_create_import_records_table.php
+```
+
+### The wizard (`/admin/import-prodotti`, "Import" nav group)
+
+1. **Upload** — `FileUpload` on the **private** `local` disk (`storage/app/private/imports/`).
+   Accepts `.csv` / `.xlsx` / `.ods`. On upload, `SpreadsheetReader::inspect()`
+   reads the header, a sample of rows, the data-row count, and (for CSV) the
+   delimiter and encoding. A file-level failure clears the upload and blocks the
+   step (see below).
+2. **Map the columns** — one `Select` per file column (`mapping.{index}`),
+   pre-filled by `FieldGuesser` from the header. Plus the **"Update products
+   that already exist"** toggle (default off). On *Next*: exactly one column must
+   map to `sku`, and no field may be mapped twice — otherwise a clear error.
+3. **Preview** — the first `preview_rows` (10) rows run through
+   `ProductRowImporter` in **`dryRun`** mode and are shown with their expected
+   outcome (*will be created* / *will update the existing one* / *skipped —
+   reason*). Same code path as the real import, so the preview matches.
+
+**Confirm** creates an `ImportRecord` and then, by row count:
+
+| Rows | |
+|---|---|
+| ≤ `inline_max_rows` (300) | runs inline in the confirm request; redirects to a finished report |
+| > 300 | `RunProductImport` is queued; the report page polls (`wire:poll`) until done |
+
+### Matching and the "update existing" toggle
+
+Rows are matched on **`sku`** (case-insensitive). With the toggle **off**, a row
+whose SKU already exists is skipped and listed in the report. With it **on**,
+the row updates that product — and **an empty or unmapped value leaves the
+existing value untouched** (only non-empty cells are written). A new product
+with no `status` defaults to `draft`.
+
+Value parsing: numbers accept both `1.234,56` and `1234.56` and a trailing
+`kg`/`cm`; `status` accepts `draft`/`active`/`archived` and the Italian
+`bozza`/`attivo`/`archiviato`. The base-language `name` / `description` go
+through the Localization module; `price` is written to the default price list
+via `ProductPriceMatrix`.
+
+### File-level failures vs row-level problems
+
+**File-level** (raised as one translated `UnreadableImportFile`, shown at the
+relevant wizard step, nothing is imported):
+
+- not a valid CSV / spreadsheet, or corrupt;
+- header row unreadable, or no data rows;
+- CSV encoding that is not UTF-8 and not detectable as Windows-1252 / ISO-8859-1
+  ("re-export as UTF-8");
+- legacy `.xls` (Excel 97-2003) — openspout cannot read it ("save as .xlsx or .csv");
+- at the mapping step: no column mapped to SKU.
+
+**Row-level** (the run continues; each is one line in the report): SKU missing,
+SKU duplicated within the file, SKU already exists (toggle off), name missing on
+a new product, a numeric field that is not a number or is negative, stock not a
+whole number, an unrecognised `status`.
+
+### Report
+
+`ImportRecordResource` ("Esiti import", read-only — no create/edit): a list of
+past runs, and a **View** page with the created / updated / skipped counts, the
+run timing, and the plain-language list of skipped rows
+(`import_records.issues`, capped at `issues_cap` = 500, then "…and N more").
+
+### `import_records` table
+
+| Column | Notes |
+|---|---|
+| `user_id` | FK → `users`, `nullOnDelete` |
+| `original_filename` | as uploaded |
+| `stored_path` | on the `local` disk; nulled by the prune command |
+| `status` | `pending` → `processing` → `completed` \| `failed` |
+| `update_existing` | bool |
+| `mapping` | json — column index → field |
+| `meta` | json — header, delimiter, encoding |
+| `total_rows` | data rows counted at upload |
+| `created_count` / `updated_count` / `skipped_count` | uint |
+| `issues` | json — `[{line, reason}, …]` |
+| `error_message` | set on a file-level failure |
+| `started_at` / `finished_at` | timestamps |
+
+### Scheduling (needs a cron on Netsons)
+
+`routes/console.php` schedules:
+
+```php
+Schedule::command('queue:work --stop-when-empty --max-time=50 --tries=1 --sleep=1')
+    ->everyMinute()->withoutOverlapping()->runInBackground();
+Schedule::command('importgestionali:prune-files')->dailyAt('03:10');
+```
+
+The shared host runs no queue worker, so this only takes effect once a single
+cPanel cron is added:
+
+```
+* * * * * cd ~/apps/pim && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Until then, imports of **≤ 300 rows still work** (they run inline); a larger one
+stays `pending`. `importgestionali:prune-files` deletes stored source files
+older than `prune_days` (7); the `ImportRecord` rows (the reports) are kept.
+
+---
+
 ## Interface localization
 
 The **panel UI** (labels, buttons, notifications) is translatable, separately
