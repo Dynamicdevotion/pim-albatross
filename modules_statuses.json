@@ -3,5 +3,6 @@
     "Localization": true,
     "Taxonomies": true,
     "Pricing": true,
-    "SavedViews": true
+    "SavedViews": true,
+    "ImportGestionali": true
 }

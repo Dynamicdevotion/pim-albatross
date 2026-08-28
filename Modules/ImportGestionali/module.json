@@ -1,0 +1,11 @@
+{
+    "name": "ImportGestionali",
+    "alias": "importgestionali",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\ImportGestionali\\Providers\\ImportGestionaliServiceProvider"
+    ],
+    "files": []
+}
