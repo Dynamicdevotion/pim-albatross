@@ -11,6 +11,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -35,7 +36,7 @@ class ProductsTable
                 ->withCount('variants')
                 ->with(['translations', 'taxonomyTerms.taxonomy', 'media']))
             // The generic toolbar search box is gone; name/SKU search lives in
-            // the filter panel as the `search` filter below.
+            // the filter drawer as the `search` filter below.
             ->searchable(false)
             // Every column is freely toggleable from the column manager — no
             // column is locked visible.
@@ -152,6 +153,9 @@ class ProductsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            // Rendered by our own bottom drawer in the page view; Filament must
+            // not also render a trigger/panel of its own.
+            ->filtersLayout(FiltersLayout::Hidden)
             ->filtersFormColumns(2)
             ->filters([
                 self::searchFilter(),
