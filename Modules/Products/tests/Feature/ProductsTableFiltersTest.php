@@ -110,6 +110,30 @@ class ProductsTableFiltersTest extends TestCase
             ->assertCanNotSeeTableRecords([$a, $c, $d]);
     }
 
+    public function test_search_filter_matches_the_base_name_or_the_sku(): void
+    {
+        $byName = $this->product('AAA', 'Cappello di paglia');
+        $bySku = $this->product('STRAW-42', 'Altro');
+        $miss = $this->product('BBB', 'Niente');
+
+        Livewire::test(ListProducts::class)
+            ->filterTable('search', ['term' => 'paglia'])
+            ->assertCanSeeTableRecords([$byName])
+            ->assertCanNotSeeTableRecords([$bySku, $miss]);
+
+        Livewire::test(ListProducts::class)
+            ->filterTable('search', ['term' => 'straw-42'])
+            ->assertCanSeeTableRecords([$bySku])
+            ->assertCanNotSeeTableRecords([$byName, $miss]);
+    }
+
+    public function test_the_generic_toolbar_search_is_disabled(): void
+    {
+        $component = Livewire::test(ListProducts::class);
+
+        $this->assertFalse($component->instance()->getTable()->isSearchable());
+    }
+
     public function test_stock_filter_zero_and_low_exclude_variable_containers(): void
     {
         $zero = $this->product('Z');

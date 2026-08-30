@@ -34,6 +34,9 @@ class ProductsTable
                 ->whereNull('parent_id')
                 ->withCount('variants')
                 ->with(['translations', 'taxonomyTerms.taxonomy', 'media']))
+            // The generic toolbar search box is gone; name/SKU search lives in
+            // the filter panel as the `search` filter below.
+            ->searchable(false)
             // Every column is freely toggleable from the column manager — no
             // column is locked visible.
             ->columns([
@@ -47,11 +50,6 @@ class ProductsTable
                 TextColumn::make('name_base')
                     ->label(__('pim.field.name'))
                     ->getStateUsing(fn (Product $record): ?string => $record->translate(Locales::baseCode())?->name)
-                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas(
-                        'translations',
-                        fn (Builder $q) => $q->where('language_id', Locales::idFor(Locales::baseCode()))
-                            ->where('name', 'like', "%{$search}%"),
-                    ))
                     ->toggleable(),
                 TextColumn::make('type')
                     ->label(__('pim.field.type'))
@@ -96,12 +94,10 @@ class ProductsTable
                     ->toggleable(),
                 TextColumn::make('sku')
                     ->label(__('pim.field.sku'))
-                    ->searchable()
                     ->sortable()
                     ->toggleable(),
                 TextColumn::make('external_id')
                     ->label(__('pim.field.external_id'))
-                    ->searchable()
                     ->toggleable(),
                 TextColumn::make('stock')
                     ->label(__('pim.field.stock'))
@@ -158,6 +154,7 @@ class ProductsTable
             ])
             ->filtersFormColumns(2)
             ->filters([
+                self::searchFilter(),
                 SelectFilter::make('type')
                     ->label(__('pim.filter.type'))
                     ->options(collect(ProductType::cases())
@@ -214,6 +211,45 @@ class ProductsTable
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * Free-text search on the base-language name or the SKU. Replaces the
+     * generic toolbar search box, deferred like every other filter.
+     */
+    protected static function searchFilter(): Filter
+    {
+        return Filter::make('search')
+            ->label(__('pim.field.search'))
+            ->schema([
+                TextInput::make('term')
+                    ->label(__('pim.field.search'))
+                    ->placeholder(__('pim.grid.search_placeholder'))
+                    ->columnSpanFull(),
+            ])
+            ->query(function (Builder $query, array $data): Builder {
+                $term = trim((string) ($data['term'] ?? ''));
+
+                if ($term === '') {
+                    return $query;
+                }
+
+                return $query->where(function (Builder $inner) use ($term): void {
+                    $inner
+                        ->whereHas(
+                            'translations',
+                            fn (Builder $relation): Builder => $relation
+                                ->where('language_id', Locales::idFor(Locales::baseCode()))
+                                ->where('name', 'like', "%{$term}%"),
+                        )
+                        ->orWhere('sku', 'like', "%{$term}%");
+                });
+            })
+            ->indicateUsing(function (array $data): ?string {
+                $term = trim((string) ($data['term'] ?? ''));
+
+                return $term === '' ? null : __('pim.field.search').': '.$term;
+            });
     }
 
     /**
