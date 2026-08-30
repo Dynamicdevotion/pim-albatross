@@ -34,13 +34,16 @@ class ProductsTable
                 ->whereNull('parent_id')
                 ->withCount('variants')
                 ->with(['translations', 'taxonomyTerms.taxonomy', 'media']))
+            // Every column is freely toggleable from the column manager — no
+            // column is locked visible.
             ->columns([
                 ImageColumn::make('main_image')
                     ->label(__('pim.field.image'))
                     ->getStateUsing(fn (Product $record): ?string => $record->getMainImageUrl('thumb'))
                     ->imageSize(40)
                     ->square()
-                    ->defaultImageUrl(fn (): string => asset('images/placeholder-product.svg')),
+                    ->defaultImageUrl(fn (): string => asset('images/placeholder-product.svg'))
+                    ->toggleable(),
                 TextColumn::make('name_base')
                     ->label(__('pim.field.name'))
                     ->getStateUsing(fn (Product $record): ?string => $record->translate(Locales::baseCode())?->name)
@@ -48,17 +51,20 @@ class ProductsTable
                         'translations',
                         fn (Builder $q) => $q->where('language_id', Locales::idFor(Locales::baseCode()))
                             ->where('name', 'like', "%{$search}%"),
-                    )),
+                    ))
+                    ->toggleable(),
                 TextColumn::make('type')
                     ->label(__('pim.field.type'))
                     ->badge()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('variants_count')
                     ->label(__('pim.field.variants'))
                     ->tooltip(__('pim.tooltip.variants_count'))
                     ->formatStateUsing(fn (int $state, Product $record): string => $record->isVariable()
                         ? trans_choice('pim.column.variants_count', $state, ['count' => $state])
-                        : '—'),
+                        : '—')
+                    ->toggleable(),
                 TextColumn::make('translated_locales')
                     ->label(__('pim.field.translations'))
                     ->badge()
@@ -76,7 +82,8 @@ class ProductsTable
                     })
                     ->color(fn (string $state): string => $state === strtoupper(Locales::baseCode()) ? 'primary' : 'gray')
                     ->placeholder('—')
-                    ->tooltip(__('pim.tooltip.translated_languages')),
+                    ->tooltip(__('pim.tooltip.translated_languages'))
+                    ->toggleable(),
                 TextColumn::make('taxonomy_terms')
                     ->label(__('pim.field.terms'))
                     ->badge()
@@ -90,7 +97,8 @@ class ProductsTable
                 TextColumn::make('sku')
                     ->label(__('pim.field.sku'))
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('external_id')
                     ->label(__('pim.field.external_id'))
                     ->searchable()
@@ -137,7 +145,8 @@ class ProductsTable
                         'active' => 'success',
                         'archived' => 'danger',
                         default => 'gray',
-                    }),
+                    })
+                    ->toggleable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
