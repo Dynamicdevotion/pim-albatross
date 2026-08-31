@@ -1017,9 +1017,12 @@ report.
 - **fields (v1, fixed)** — `sku`, `name` + `description` (base language),
   `regular_price` (default `PriceList`; missing → still pushed, noted in the
   report), `weight` + `dimensions`, `images` (main then gallery, by public URL),
-  `categories` (see below). `manage_stock = true`.
+  `categories` (see below). **No stock fields are ever sent** (`manage_stock`,
+  `stock_quantity`, `stock_status`): inventory is one-directional, Woo → PIM.
 - **stock write-back** — the store's `stock_quantity` overwrites `product.stock`
-  (`saveQuietly`) when Woo manages stock for it.
+  (`saveQuietly`) whenever the store's response says it manages stock for that
+  product (`manage_stock: true`); until a shop manager turns that on in Woo, a
+  WooSync-created product carries no stock and the write-back is a no-op.
 - **rate limit** — a `429` anywhere stops the whole run (`status = failed`,
   partial progress kept); a small `request_delay_ms` pause (default 250ms) sits
   between products.

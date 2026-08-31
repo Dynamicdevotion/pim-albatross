@@ -53,7 +53,9 @@ class ProductPayloadTest extends TestCase
         $this->assertSame('Sedia', $body['name']);
         $this->assertSame('Una sedia comoda', $body['description']);
         $this->assertSame('19.90', $body['regular_price']);
-        $this->assertTrue($body['manage_stock']);
+        $this->assertArrayNotHasKey('manage_stock', $body);
+        $this->assertArrayNotHasKey('stock_quantity', $body);
+        $this->assertArrayNotHasKey('stock_status', $body);
         $this->assertSame('1.250', $body['weight']);
         $this->assertSame(['length' => '10.00', 'width' => '20.00'], $body['dimensions']);
         $this->assertCount(2, $body['images']);
