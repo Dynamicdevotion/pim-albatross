@@ -1,0 +1,11 @@
+{
+    "name": "WooSync",
+    "alias": "woosync",
+    "description": "Sincronizzazione prodotti verso un negozio WooCommerce (add-on commerciale separato, feature flag Pennant).",
+    "keywords": ["woocommerce", "sync", "addon"],
+    "priority": 0,
+    "providers": [
+        "Modules\\WooSync\\Providers\\WooSyncServiceProvider"
+    ],
+    "files": []
+}

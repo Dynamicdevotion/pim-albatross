@@ -1,0 +1,133 @@
+<?php
+
+namespace Modules\WooSync\Support;
+
+use Modules\Localization\Support\Locales;
+use Modules\Pricing\Models\PriceList;
+use Modules\Products\Models\Product;
+
+/**
+ * Builds the WooCommerce product payload for one PIM product and records what,
+ * if anything, had to be left out. The v1 field set is fixed: sku, name and
+ * description (base language), regular_price (from the default price list),
+ * weight and dimensions, images (main image then gallery, by public URL), and
+ * categories (resolved separately by {@see CategoryResolver} and passed in).
+ *
+ * Only `simple` products are pushable; `variable` / `variant` rows are the
+ * runner's concern (skipped with a reason) and never reach here.
+ */
+class ProductPayload
+{
+    /** @var list<string> human-readable notes about data that was omitted */
+    public array $warnings = [];
+
+    public function __construct(private readonly Product $product) {}
+
+    public static function for(Product $product): self
+    {
+        return new self($product);
+    }
+
+    /**
+     * @param  list<int>  $categoryIds  already-resolved Woo category ids
+     * @return array<string, mixed>
+     */
+    public function build(array $categoryIds = []): array
+    {
+        $translation = $this->product->translate(Locales::baseCode());
+
+        if ($translation?->name === null) {
+            $this->warnings[] = __('pim.woosync.warn.no_name', ['locale' => strtoupper(Locales::baseCode())]);
+        }
+
+        $payload = [
+            'name' => $translation?->name ?? (string) $this->product->sku,
+            'type' => 'simple',
+            'sku' => (string) $this->product->sku,
+            'description' => (string) ($translation?->description ?? ''),
+            'manage_stock' => true,
+        ];
+
+        $payload += $this->priceFields();
+        $payload += $this->shippingFields();
+
+        $images = $this->imageUrls();
+        if ($images !== []) {
+            $payload['images'] = array_map(static fn (string $src): array => ['src' => $src], $images);
+        }
+
+        if ($categoryIds !== []) {
+            $payload['categories'] = array_map(static fn (int $id): array => ['id' => $id], $categoryIds);
+        }
+
+        return $payload;
+    }
+
+    /** @return array<string, mixed> */
+    private function priceFields(): array
+    {
+        $list = PriceList::default();
+
+        $price = $list !== null
+            ? $this->product->prices->firstWhere('price_list_id', $list->id)?->price
+            : null;
+
+        if ($price === null) {
+            $this->warnings[] = __('pim.woosync.warn.no_price');
+
+            return [];
+        }
+
+        return ['regular_price' => (string) $price];
+    }
+
+    /** @return array<string, mixed> */
+    private function shippingFields(): array
+    {
+        $fields = [];
+
+        if ($this->product->weight !== null) {
+            $fields['weight'] = (string) $this->product->weight;
+        }
+
+        $dimensions = array_filter([
+            'length' => $this->product->length,
+            'width' => $this->product->width,
+            'height' => $this->product->height,
+        ], static fn ($value): bool => $value !== null);
+
+        if ($dimensions !== []) {
+            $fields['dimensions'] = array_map(static fn ($value): string => (string) $value, $dimensions);
+        }
+
+        return $fields;
+    }
+
+    /**
+     * Public URLs of the product's images: main image first, then the gallery,
+     * in order. WooCommerce downloads each by URL, so the media disk must be
+     * publicly reachable — it is (`public` disk, HTTPS APP_URL).
+     *
+     * @return list<string>
+     */
+    public function imageUrls(): array
+    {
+        $urls = [];
+
+        $main = $this->product->getFirstMediaUrl('main_image');
+        if ($main !== '') {
+            $urls[] = $main;
+        }
+
+        foreach ($this->product->getMedia('gallery') as $media) {
+            $urls[] = $media->getUrl();
+        }
+
+        return array_values(array_unique($urls));
+    }
+
+    public function imagesHash(): string
+    {
+        return md5(implode('|', $this->imageUrls()));
+    }
+}
