@@ -74,6 +74,16 @@ class Product extends Model implements HasMedia
 
             $product->assertConsistentType();
         });
+
+        // Spatie's InteractsWithMedia removes THIS product's media on delete,
+        // but a variable's variants are removed by the `parent_id` FK cascade
+        // (no model events fire), so their files would be orphaned. Clean them
+        // here — same idea as the deleting hooks on ImportRecord / ExportRecord.
+        static::deleting(function (Product $product): void {
+            if ($product->isVariable()) {
+                $product->variants()->cursor()->each(fn (Product $variant) => $variant->deleteAllMedia());
+            }
+        });
     }
 
     // ---- relationships ----------------------------------------------------
