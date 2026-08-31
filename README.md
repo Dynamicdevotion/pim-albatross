@@ -763,7 +763,7 @@ database/migrations/2026_08_31_130000_create_settings_table.php
 | Column | Notes |
 |---|---|
 | `brand_name` | nullable — company / product name (e.g. "Albatross") |
-| `primary_color` | nullable — hex `#rrggbb` |
+| `primary_color` | nullable — a named Filament palette key (`amber`, `blue`, …), not a hex |
 
 The logo is a Spatie Media Library `singleFile` collection `logo` (jpg / png /
 webp, max 5 MB, `public` disk) — same setup as the product images.
@@ -775,13 +775,17 @@ webp, max 5 MB, `public` disk) — same setup as the product images.
   This is what the panel closures read on every request; the cache is flushed
   by the model's `saved` / `deleted` events and explicitly by the settings page
   after a logo-only change.
-- **`Setting::primaryPalette()`** — `Color::hex($primary_color)` expanded to
-  shades, or `Color::Amber` (the historical default) when unset or malformed.
+- **`Setting::primaryPalette()`** — `Color::all()[$primary_color]` (a named
+  Filament palette expanded to shades), or `Color::Amber` (the historical
+  default) when unset or unknown. `Setting::primaryPaletteOptions()` builds the
+  `value => HTML swatch label` list for the picker (`Setting::PRIMARY_PALETTES`,
+  ~10 curated names).
 
 ### `ManageBranding` page (`/admin/impostazioni`, "Impostazioni" nav group)
 
-A form: `SpatieMediaLibraryFileUpload` (logo) + `TextInput` (name) +
-`ColorPicker` (primary colour). `mount()` fills from `Setting::current()`;
+A form: `SpatieMediaLibraryFileUpload` (logo) + `TextInput` (name) + a
+`Select` (`->native(false)->allowHtml()`) of ~10 named Filament palettes shown
+as colour swatches. `mount()` fills from `Setting::current()`;
 `save()` calls `$this->form->getState()` (which persists the logo via the
 schema's `saveRelationships()`), updates the two columns and flushes the cache.
 

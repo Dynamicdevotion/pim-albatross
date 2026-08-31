@@ -3,7 +3,7 @@
 namespace Modules\Branding\Filament\Pages;
 
 use BackedEnum;
-use Filament\Forms\Components\ColorPicker;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -85,8 +85,12 @@ class ManageBranding extends Page
                             ->placeholder('Albatross')
                             ->maxLength(255)
                             ->helperText(__('pim.branding.help.brand_name')),
-                        ColorPicker::make('primary_color')
+                        Select::make('primary_color')
                             ->label(__('pim.branding.field.primary_color'))
+                            ->native(false)
+                            ->allowHtml()
+                            ->options(Setting::primaryPaletteOptions())
+                            ->placeholder(__('pim.branding.palette.default'))
                             ->helperText(__('pim.branding.help.primary_color')),
                     ]),
             ]);

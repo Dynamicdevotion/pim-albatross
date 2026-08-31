@@ -407,6 +407,9 @@ return [
             'brand_name' => 'Usato nell\'intestazione quando non è caricato alcun logo.',
             'primary_color' => 'Applicato a bottoni, link e accenti del tema. Vuoto = colore predefinito (ambra).',
         ],
+        'palette' => [
+            'default' => 'Predefinito (ambra)',
+        ],
         'action' => [
             'save' => 'Salva',
         ],
