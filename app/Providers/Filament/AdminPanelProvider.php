@@ -24,6 +24,7 @@ use Modules\Localization\Filament\LocalizationPanelPlugin;
 use Modules\Pricing\Filament\PricingPanelPlugin;
 use Modules\Products\Filament\ProductsPanelPlugin;
 use Modules\Taxonomies\Filament\TaxonomiesPanelPlugin;
+use Modules\WooSync\Filament\WooSyncPanelPlugin;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -56,6 +57,7 @@ class AdminPanelProvider extends PanelProvider
                 __('pim.nav.pricing'),
                 __('pim.import.nav.group'),
                 __('pim.export.nav.group'),
+                __('pim.woosync.nav.group'),
                 __('pim.branding.nav.group'),
             ])
             ->plugins([
@@ -65,6 +67,7 @@ class AdminPanelProvider extends PanelProvider
                 PricingPanelPlugin::make(),
                 ImportGestionaliPanelPlugin::make(),
                 ExportProdottiPanelPlugin::make(),
+                WooSyncPanelPlugin::make(),
                 BrandingPanelPlugin::make(),
                 DashboardPanelPlugin::make(),
             ])

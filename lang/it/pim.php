@@ -473,4 +473,117 @@ return [
             ],
         ],
     ],
+
+    // Modulo WooSync — sincronizzazione prodotti verso un negozio WooCommerce.
+    // Add-on commerciale separato, attivabile per installazione (feature flag
+    // Laravel Pennant "woosync" / WOOSYNC_ENABLED).
+    'woosync' => [
+        'nav' => [
+            'group' => 'WooCommerce',
+            'settings' => 'Connessione',
+            'runs' => 'Sincronizzazioni',
+        ],
+        'page' => [
+            'title' => 'Connessione WooCommerce',
+        ],
+        'section' => [
+            'connection' => 'Negozio WooCommerce',
+            'connection_hint' => 'URL del negozio e chiavi API REST (Consumer Key / Secret). Il negozio deve usare HTTPS.',
+            'last_test' => 'Ultimo test',
+        ],
+        'field' => [
+            'store_url' => 'URL del negozio',
+            'consumer_key' => 'Consumer Key',
+            'consumer_secret' => 'Consumer Secret',
+        ],
+        'help' => [
+            'store_url' => 'Es. https://negozio.esempio.it — deve iniziare con https://',
+            'consumer_key' => 'WooCommerce → Impostazioni → Avanzate → API REST. Servono permessi di Lettura/Scrittura.',
+        ],
+        'validation' => [
+            'https' => 'L\'URL del negozio deve usare HTTPS.',
+        ],
+        'action' => [
+            'sync' => 'Sincronizza con WooCommerce',
+            'sync_bulk' => 'Sincronizza i prodotti selezionati con WooCommerce',
+            'test' => 'Testa connessione',
+            'save' => 'Salva',
+        ],
+        'confirm' => [
+            'single' => 'Inviare il prodotto «:product» al negozio WooCommerce?',
+            'bulk' => 'Inviare i prodotti selezionati al negozio WooCommerce? Verranno sincronizzati solo i prodotti semplici.',
+        ],
+        'test' => [
+            'ok' => 'Connessione riuscita.',
+            'failed' => 'Connessione non riuscita.',
+            'never' => 'Nessun test eseguito finora.',
+            'summary' => 'Test del :when — :outcome',
+        ],
+        'notify' => [
+            'queued' => 'Sincronizzazione in coda: verrà elaborata a breve.',
+            'done' => 'Sincronizzazione completata: :created creati, :updated aggiornati, :skipped saltati, :failed falliti.',
+        ],
+        'notification' => [
+            'saved' => 'Impostazioni WooCommerce salvate.',
+        ],
+        'trigger' => [
+            'single' => 'Singolo',
+            'bulk' => 'Multiplo',
+        ],
+        'status' => [
+            'pending' => 'In attesa',
+            'processing' => 'In corso',
+            'completed' => 'Completata',
+            'failed' => 'Fallita',
+        ],
+        'result' => [
+            'created' => 'Creato',
+            'updated' => 'Aggiornato',
+            'skipped' => 'Saltato',
+            'failed' => 'Fallito',
+        ],
+        'col' => [
+            'when' => 'Data',
+            'user' => 'Utente',
+            'trigger' => 'Tipo',
+            'total' => 'Totale',
+            'created' => 'Creati',
+            'updated' => 'Aggiornati',
+            'skipped' => 'Saltati',
+            'failed' => 'Falliti',
+        ],
+        'run' => [
+            'label' => 'Sincronizzazione',
+            'plural' => 'Sincronizzazioni',
+        ],
+        'report' => [
+            'summary' => 'Riepilogo',
+            'started' => 'Iniziata',
+            'finished' => 'Conclusa',
+            'running_hint' => 'Sincronizzazione in corso… la pagina si aggiorna da sola.',
+            'error' => 'Errore',
+            'items' => 'Esito per prodotto',
+            'item_product' => 'Prodotto',
+            'item_result' => 'Esito',
+            'item_reason' => 'Dettaglio',
+        ],
+        'skip' => [
+            'not_simple' => 'Saltato: in questa versione sono sincronizzabili solo i prodotti semplici.',
+            'no_sku' => 'Saltato: SKU mancante.',
+        ],
+        'warn' => [
+            'no_price' => 'Nessun prezzo sul listino predefinito: inviato senza prezzo.',
+            'no_name' => 'Nome mancante nella lingua base (:locale): usato lo SKU.',
+        ],
+        'error' => [
+            'not_configured' => 'Connessione WooCommerce non configurata.',
+            'unreachable' => 'Negozio irraggiungibile.',
+            'auth' => 'Credenziali WooCommerce non valide o scadute.',
+            'rate_limited' => 'Il negozio ha chiesto di rallentare (troppe richieste). Riprova più tardi.',
+            'rejected' => 'Richiesta rifiutata dal negozio.',
+            'gone' => 'Risorsa non trovata sul negozio.',
+            'store_error' => 'Errore interno del negozio.',
+            'unexpected' => 'Errore imprevisto durante la sincronizzazione.',
+        ],
+    ],
 ];

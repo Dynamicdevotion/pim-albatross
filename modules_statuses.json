@@ -7,5 +7,6 @@
     "ImportGestionali": true,
     "ExportProdotti": true,
     "Branding": true,
-    "Dashboard": true
+    "Dashboard": true,
+    "WooSync": true
 }

@@ -23,6 +23,7 @@ use Modules\Pricing\Models\PriceList;
 use Modules\Products\Enums\ProductType;
 use Modules\Products\Models\Product;
 use Modules\Products\Support\ProductListQuery;
+use Modules\Products\Support\ProductRowActions;
 
 class ProductsTable
 {
@@ -187,6 +188,9 @@ class ProductsTable
             ])
             ->recordActions([
                 EditAction::make(),
+                // Extra per-row actions contributed by other modules (e.g.
+                // WooSync's "Sincronizza con WooCommerce"), if any.
+                ...ProductRowActions::record(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -211,6 +215,9 @@ class ProductsTable
                                 ->send();
                         })
                         ->deselectRecordsAfterCompletion(),
+                    // Extra bulk actions contributed by other modules
+                    // (e.g. WooSync), if any.
+                    ...ProductRowActions::bulk(),
                     DeleteBulkAction::make(),
                 ]),
             ]);
