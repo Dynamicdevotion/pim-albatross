@@ -174,9 +174,12 @@ class ProductsTable
                     ->query(fn (Builder $query, array $data): Builder => ProductListQuery::status($query, $data)),
                 SelectFilter::make('missing_translation')
                     ->label(__('pim.filter.missing_translation'))
-                    ->options(fn (): array => Locales::active()
-                        ->mapWithKeys(fn (Language $language): array => [$language->code => $language->name])
-                        ->all())
+                    ->options(fn (): array => [
+                        '*' => __('pim.filter.missing_translation_any'),
+                        ...Locales::active()
+                            ->mapWithKeys(fn (Language $language): array => [$language->code => $language->name])
+                            ->all(),
+                    ])
                     ->query(fn (Builder $query, array $data): Builder => ProductListQuery::missingTranslation($query, $data)),
                 self::taxonomyFilter(),
                 self::priceFilter(),

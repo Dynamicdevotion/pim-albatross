@@ -96,6 +96,7 @@ return [
 
     'filter' => [
         'missing_translation' => 'Traduzione mancante',
+        'missing_translation_any' => 'Una qualsiasi lingua attiva',
         'price' => 'Prezzo',
         'type' => 'Tipo',
         'variant_scope' => 'Varianti',
@@ -411,6 +412,39 @@ return [
         ],
         'notification' => [
             'saved' => 'Impostazioni di branding salvate',
+        ],
+    ],
+
+    // Modulo Dashboard — panoramica catalogo nella home del pannello.
+    'dashboard' => [
+        'stat' => [
+            'active' => 'Prodotti attivi',
+            'draft' => 'Bozze',
+            'archived' => 'Archiviati',
+            'no_price' => 'Senza prezzo',
+            'no_price_hint' => 'Nessun prezzo sul listino «:list»',
+            'stock_zero' => 'Stock a zero',
+            'missing_translation' => 'Traduzione mancante',
+        ],
+        'col' => [
+            'created' => 'Creato il',
+        ],
+        'missing_image' => [
+            'heading' => 'Prodotti recenti senza immagine',
+            'empty' => 'Tutti i prodotti recenti hanno un\'immagine principale.',
+        ],
+        'import_issues' => [
+            'heading' => 'Righe scartate nell\'ultimo import',
+            'view_report' => 'Vedi report completo',
+            'subheading' => 'Import «:file» del :date — :count righe scartate.',
+            'more' => '…e altre :count righe.',
+            'empty' => 'Nessun import recente con righe scartate.',
+        ],
+        'chart' => [
+            'category' => [
+                'heading' => 'Prodotti per categoria',
+                'dataset' => 'Prodotti',
+            ],
         ],
     ],
 ];

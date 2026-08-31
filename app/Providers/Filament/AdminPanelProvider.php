@@ -10,8 +10,6 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
-use Filament\Widgets\AccountWidget;
-use Filament\Widgets\FilamentInfoWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -19,6 +17,7 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Modules\Branding\Filament\BrandingPanelPlugin;
+use Modules\Dashboard\Filament\DashboardPanelPlugin;
 use Modules\ExportProdotti\Filament\ExportProdottiPanelPlugin;
 use Modules\ImportGestionali\Filament\ImportGestionaliPanelPlugin;
 use Modules\Localization\Filament\LocalizationPanelPlugin;
@@ -34,6 +33,8 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            // Base fallback; BrandingPanelPlugin appends a dynamic `primary`
+            // from the settings row (also falling back to Amber when unset).
             ->colors([
                 'primary' => Color::Amber,
             ])
@@ -43,10 +44,8 @@ class AdminPanelProvider extends PanelProvider
                 Dashboard::class,
             ])
             ->discoverWidgets(in: app_path('Filament/Admin/Widgets'), for: 'App\Filament\Admin\Widgets')
-            ->widgets([
-                AccountWidget::class,
-                FilamentInfoWidget::class,
-            ])
+            // Stock widgets replaced by the Dashboard module (see DashboardPanelPlugin).
+            ->widgets([])
             ->plugins([
                 LocalizationPanelPlugin::make(),
                 ProductsPanelPlugin::make(),
@@ -55,6 +54,7 @@ class AdminPanelProvider extends PanelProvider
                 ImportGestionaliPanelPlugin::make(),
                 ExportProdottiPanelPlugin::make(),
                 BrandingPanelPlugin::make(),
+                DashboardPanelPlugin::make(),
             ])
             ->middleware([
                 EncryptCookies::class,

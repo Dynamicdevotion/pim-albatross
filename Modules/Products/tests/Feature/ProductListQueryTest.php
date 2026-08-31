@@ -4,6 +4,7 @@ namespace Modules\Products\Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Modules\Localization\Database\Seeders\LanguageSeeder;
+use Modules\Localization\Support\Locales;
 use Modules\Pricing\Models\PriceList;
 use Modules\Products\Models\Product;
 use Modules\Products\Support\ProductListQuery;
@@ -67,5 +68,29 @@ class ProductListQueryTest extends TestCase
         ])->pluck('sku')->all();
 
         $this->assertSame(['MATCH'], $skus);
+    }
+
+    public function test_missing_translation_per_language_and_any(): void
+    {
+        $activeCodes = Locales::activeCodes();
+
+        $complete = Product::factory()->create(['sku' => 'FULL']);
+        foreach ($activeCodes as $code) {
+            $complete->translations()->create(['locale' => $code, 'name' => "Full {$code}"]);
+        }
+
+        $itOnly = $this->product('IT-ONLY', 'Solo italiano'); // base language only
+        $none = Product::factory()->create(['sku' => 'NONE']); // no translations at all
+
+        // Per-language: only products with no row in that specific language.
+        $missingEn = ProductListQuery::for(['missing_translation' => ['value' => 'en']])
+            ->pluck('sku')->all();
+        $this->assertEqualsCanonicalizing(['IT-ONLY', 'NONE'], $missingEn);
+
+        // Any active language: fewer translations than active languages.
+        $missingAny = ProductListQuery::for(['missing_translation' => ['value' => '*']])
+            ->pluck('sku')->all();
+        $this->assertEqualsCanonicalizing(['IT-ONLY', 'NONE'], $missingAny);
+        $this->assertNotContains('FULL', $missingAny);
     }
 }

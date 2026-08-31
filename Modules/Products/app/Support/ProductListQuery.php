@@ -134,7 +134,14 @@ class ProductListQuery
     }
 
     /**
-     * Products with no translation row in the chosen language.
+     * Products missing a translation. `value` selects the semantics:
+     *  - a language code — products with no translation row in that language
+     *    (the per-language options in the drawer);
+     *  - `'*'` — products missing a translation in *at least one* active
+     *    language: fewer translation rows in active languages than there are
+     *    active languages (products with none included). This is the clause the
+     *    dashboard "missing translation" stat counts with, so its number and
+     *    the filtered list it links to always agree.
      *
      * @param  Builder<Product>  $query
      * @param  array<string, mixed>  $data
@@ -142,12 +149,27 @@ class ProductListQuery
      */
     public static function missingTranslation(Builder $query, array $data): Builder
     {
-        return filled($data['value'] ?? null)
-            ? $query->whereDoesntHave(
+        $value = $data['value'] ?? null;
+
+        if (blank($value)) {
+            return $query;
+        }
+
+        if ($value === '*') {
+            $activeIds = Locales::active()->pluck('id')->all();
+
+            return $query->whereHas(
                 'translations',
-                fn (Builder $relation): Builder => $relation->where('language_id', Locales::idFor($data['value'])),
-            )
-            : $query;
+                fn (Builder $relation): Builder => $relation->whereIn('language_id', $activeIds),
+                '<',
+                count($activeIds),
+            );
+        }
+
+        return $query->whereDoesntHave(
+            'translations',
+            fn (Builder $relation): Builder => $relation->where('language_id', Locales::idFor($value)),
+        );
     }
 
     /**

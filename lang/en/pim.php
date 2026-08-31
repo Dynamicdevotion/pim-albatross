@@ -96,6 +96,7 @@ return [
 
     'filter' => [
         'missing_translation' => 'Missing translation',
+        'missing_translation_any' => 'Any active language',
         'price' => 'Price',
         'type' => 'Type',
         'variant_scope' => 'Variants',
@@ -411,6 +412,39 @@ return [
         ],
         'notification' => [
             'saved' => 'Branding settings saved',
+        ],
+    ],
+
+    // Dashboard module — catalogue overview on the panel home.
+    'dashboard' => [
+        'stat' => [
+            'active' => 'Active products',
+            'draft' => 'Drafts',
+            'archived' => 'Archived',
+            'no_price' => 'No price',
+            'no_price_hint' => 'No price on the ":list" list',
+            'stock_zero' => 'Out of stock',
+            'missing_translation' => 'Missing translation',
+        ],
+        'col' => [
+            'created' => 'Created on',
+        ],
+        'missing_image' => [
+            'heading' => 'Recent products without an image',
+            'empty' => 'Every recent product has a main image.',
+        ],
+        'import_issues' => [
+            'heading' => 'Rows dropped by the last import',
+            'view_report' => 'View full report',
+            'subheading' => 'Import ":file" on :date — :count rows dropped.',
+            'more' => '…and :count more rows.',
+            'empty' => 'No recent import dropped any rows.',
+        ],
+        'chart' => [
+            'category' => [
+                'heading' => 'Products by category',
+                'dataset' => 'Products',
+            ],
         ],
     ],
 ];

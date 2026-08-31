@@ -6,5 +6,6 @@
     "SavedViews": true,
     "ImportGestionali": true,
     "ExportProdotti": true,
-    "Branding": true
+    "Branding": true,
+    "Dashboard": true
 }

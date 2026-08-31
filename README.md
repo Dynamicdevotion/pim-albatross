@@ -807,6 +807,72 @@ as the base; the plugin appends the dynamic `primary` (itself Amber-defaulting).
 
 ---
 
+## Dashboard module
+
+Replaces the stock Filament dashboard (`AccountWidget` / `FilamentInfoWidget`,
+removed from `AdminPanelProvider`) with a catalogue overview. Everything that
+can be is a link.
+
+Structure (`Modules/Dashboard/app/Filament/`):
+
+```
+DashboardPanelPlugin.php                  # $panel->widgets([...])
+Widgets/
+├── ProductOverviewStats.php              # StatsOverviewWidget — status numbers
+├── ProductsByCategoryChart.php           # ChartWidget (bar) — clickable
+├── ProductsMissingImage.php              # TableWidget — recent, no main image
+└── RecentImportIssues.php                # Widget (blade) — last import's skipped rows
+```
+
+### `ProductOverviewStats`
+
+Six `Stat`s, each counted through `ProductListQuery::for($filters)` and linking
+to `ProductResource::getUrl('index', ['filters' => $filters])` with the **same
+`$filters`** — so the number and the list it opens always agree:
+
+| Stat | `$filters` |
+|---|---|
+| Prodotti attivi / Bozze / Archiviati | `status.value = active` / `draft` / `archived` |
+| Senza prezzo | `price.presence = without` + `price.price_list_id = <default>` — only shown when a default price list exists |
+| Stock a zero | `stock.level = zero` |
+| Traduzione mancante | `missing_translation.value = *` (see below) |
+
+### `missing_translation` — the `*` option
+
+`ProductListQuery::missingTranslation()` accepts, besides a language code, the
+value **`'*'`** — products missing a translation in *at least one* active
+language:
+
+```php
+whereHas('translations',
+    fn ($q) => $q->whereIn('language_id', $activeIds),
+    '<', count($activeIds));
+```
+
+(products with no translations included). It is also a real option in the
+products filter drawer, labelled *"Una qualsiasi lingua attiva"*.
+
+### `ProductsByCategoryChart`
+
+Bar chart of product count per term of the `categoria` taxonomy. Each bar's
+value is `ProductListQuery::for(['taxonomy_terms' => ['terms' => [$term->id]]])
+->count()` — the same clause (subtree expansion included) the bar links to, so
+clicking a bar opens the list showing exactly that many rows. The click is a
+Chart.js `onClick` in `getOptions()` (`RawJs`) reading a `urls` array carried on
+the dataset. Empty (no bars) when there is no `categoria` taxonomy.
+
+### `ProductsMissingImage`
+
+`TableWidget` — the 8 most recently created top-level products with no
+`main_image` media. `recordUrl` → the product form.
+
+### `RecentImportIssues`
+
+A blade widget: the most recent **completed** `ImportRecord` with
+`skipped_count > 0`, its first 10 `issues` lines, and a link to that run's
+report (`ImportRecordResource::getUrl('view', …)`). Skipped rows are an
+import-only concept, so this always points at ImportRecords. Empty state when
+no recent import dropped any rows.
 
 ---
 
