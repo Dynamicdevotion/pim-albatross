@@ -22,6 +22,8 @@ class ProductTranslationFactory extends Factory
             'language_id' => Locales::idFor(Locales::baseCode()),
             'name' => Str::title(fake()->words(3, true)),
             'description' => '<p>'.fake()->paragraph().'</p>',
+            'meta_title' => null,
+            'meta_description' => null,
         ];
     }
 

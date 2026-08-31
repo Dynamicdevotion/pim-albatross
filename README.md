@@ -276,6 +276,12 @@ product's own main image, or — for a `variant` with none of its own — its
 parent's, or `null`. Same "own value, then parent" rule already used for variant
 names and SKUs.
 
+**Deletion.** Spatie's `InteractsWithMedia` removes a product's own media (rows
++ files) on `$product->delete()`. A variable's variants, though, are removed by
+the `parent_id` FK cascade — no model events — so `Product`'s `deleting` hook
+calls `deleteAllMedia()` on each variant first, so deleting a variable leaves no
+orphan files (mirrors the `deleting` hooks on `ImportRecord` / `ExportRecord`).
+
 **Storage.** Files live on the `public` disk at
 `storage/app/public/<media_id>/<file>` and are served through the existing
 `public/storage` symlink at `APP_URL/storage/<media_id>/<file>` — verified
@@ -286,12 +292,24 @@ component would use `filament.default_filesystem_disk` (`local` here) and the
 files would land in the non-public `storage/app/private`.
 
 **Filament.**
-- `ProductForm` and the variant form (`VariantsRelationManager`) carry an
-  *Immagini* section: a single-file `main_image` upload (with image editor) and
-  a multiple, reorderable `gallery` upload, via `SpatieMediaLibraryFileUpload`.
-  Both use `panelLayout('grid')` with `conversion('thumb')` — a compact square
-  mosaic of cropped previews (3 columns from `lg`, 2 below), capped at 30rem
-  wide.
+- `ProductForm` and the variant form (`VariantsRelationManager`) are grouped
+  into Filament sections: **SEO** (`meta_title` / `meta_description`, inside each
+  translation tab), **Spedizione** (`weight` / `length` / `width` / `height`),
+  **Immagini** (`main_image` / `gallery`); `sku` / name / description / price /
+  stock / taxonomy terms stay in the main body. A `// TODO` marks where a
+  future *Custom* section will go.
+- The *Immagini* section: a single-file `main_image` upload (with image editor)
+  and a multiple, reorderable `gallery` upload, via
+  `SpatieMediaLibraryFileUpload`. Both use `panelLayout('grid')` with
+  `conversion('thumb')` — a compact square mosaic of cropped previews (3 columns
+  from `lg`, 2 below), capped at 30rem wide.
+- Each upload has a **"Scegli da un'immagine esistente"** hint action
+  (`Modules\Products\Support\ExistingImagePicker`): a searchable `Select` of
+  every product image in the library (thumbnail + owner name + file name). On
+  confirm, `Media::copy()` **duplicates** the chosen file into this product as
+  its own independent Media row — not shared, just a shortcut past re-uploading.
+  Available on the edit form (the record must exist); on create it asks to save
+  first.
 - `ProductsTable` and the variant table show a fixed **thumbnail column**
   (`ImageColumn` over `getMainImageUrl('thumb')`, `imageSize(40)->square()`, so
   a variant with no image of its own shows the parent's — same crop). It is
@@ -336,9 +354,12 @@ active, `it` is base.
 | `language_id` | FK → `languages`, cascade on delete |
 | `name` | required — a row exists only if it has a name |
 | `description` | `product_translations` only; nullable RichEditor HTML |
+| `meta_title` / `meta_description` | `product_translations` only; both nullable, plain text — the SEO fields, optional and independent of whether the row has a `name` |
 
 Unique on `(<parent>_id, language_id)`. The translation models keep an ergonomic
-`locale` attribute (read/write by code) over `language_id`.
+`locale` attribute (read/write by code) over `language_id`. `meta_title` /
+`meta_description` follow `name` / `description` exactly — one set per language,
+shown on the simple, variant **and** variable forms.
 
 ```php
 $product->translations;              // HasMany

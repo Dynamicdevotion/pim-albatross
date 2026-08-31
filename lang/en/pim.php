@@ -29,6 +29,9 @@ return [
         'status' => 'Status',
         'type' => 'Type',
         'stock' => 'Stock',
+        'meta_title' => 'Meta title',
+        'meta_description' => 'Meta description',
+        'pick_existing' => 'Existing image',
         'variants' => 'Variants',
         'variant' => 'Variant',
         'participating_taxonomies' => 'Taxonomies involved',
@@ -117,13 +120,16 @@ return [
         'add_price' => 'Add a price',
         'generate_variants' => 'Generate variants',
         'add_variant' => 'Add a variant',
+        'pick_existing_image' => 'Choose from an existing image',
+        'pick_existing_confirm' => 'Use this image',
     ],
 
     'section' => [
         'populate_prices' => 'Populate prices from another list',
         'populate_prices_hint' => 'Optional. Copies every price from the chosen list into the new one, applying a percentage change.',
-        'dimensions' => 'Dimensions & weight',
+        'shipping' => 'Shipping',
         'media' => 'Images',
+        'seo' => 'SEO',
     ],
 
     'helper' => [
@@ -136,6 +142,9 @@ return [
         'generate_variants' => 'Pick which taxonomies define the variants and which of their values to combine. One variant is created per combination.',
         'variable_no_price' => 'A variable product groups its variants; price and stock live on each variant.',
         'variant_main_image' => 'Left empty, the variant shows its parent product\'s main image.',
+        'meta_title' => 'Title for search engines (~60 characters). Empty = no meta.',
+        'meta_description' => 'Summary for search engines (~155 characters).',
+        'pick_existing' => 'The chosen file is duplicated: each product keeps its own copy.',
     ],
 
     'modal' => [
@@ -149,6 +158,8 @@ return [
     ],
 
     'notification' => [
+        'pick_existing_done' => 'Image copied to the product',
+        'pick_existing_needs_save' => 'Save the product first to pick an existing image',
         'language_activated' => ':name activated',
         'language_deactivated' => ':name deactivated',
         'content_deleted' => ':count translation row(s) removed.',

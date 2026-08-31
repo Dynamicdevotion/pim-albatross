@@ -26,6 +26,8 @@ class ProductTranslation extends Model
         'locale',
         'name',
         'description',
+        'meta_title',
+        'meta_description',
     ];
 
     public function product(): BelongsTo

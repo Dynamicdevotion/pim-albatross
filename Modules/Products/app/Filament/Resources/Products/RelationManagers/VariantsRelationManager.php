@@ -14,9 +14,11 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Utilities\Get;
@@ -37,6 +39,7 @@ use Modules\Products\Filament\Resources\Products\Concerns\HandlesVariantPrices;
 use Modules\Products\Filament\Resources\Products\Concerns\HandlesVariantTranslations;
 use Modules\Products\Filament\Resources\Products\Schemas\ProductPricesTable;
 use Modules\Products\Models\Product;
+use Modules\Products\Support\ExistingImagePicker;
 use Modules\Products\Support\VariantGenerator;
 use Modules\Taxonomies\Models\Taxonomy;
 use Modules\Taxonomies\Models\TaxonomyTerm;
@@ -81,6 +84,20 @@ class VariantsRelationManager extends RelationManager
                             ->required($language->is_base),
                         RichEditor::make("translations.{$language->code}.description")
                             ->label(__('pim.field.description')),
+                        // --- SEO (translated, one set per language) ---
+                        Section::make(__('pim.section.seo'))
+                            ->columnSpanFull()
+                            ->schema([
+                                TextInput::make("translations.{$language->code}.meta_title")
+                                    ->label(__('pim.field.meta_title'))
+                                    ->maxLength(255)
+                                    ->helperText(__('pim.helper.meta_title')),
+                                Textarea::make("translations.{$language->code}.meta_description")
+                                    ->label(__('pim.field.meta_description'))
+                                    ->rows(2)
+                                    ->maxLength(255)
+                                    ->helperText(__('pim.helper.meta_description')),
+                            ]),
                     ]))
                     ->all()),
             TextInput::make('sku')
@@ -93,7 +110,7 @@ class VariantsRelationManager extends RelationManager
                 ->numeric()
                 ->minValue(0)
                 ->default(0),
-            Section::make(__('pim.section.dimensions'))
+            Section::make(__('pim.section.shipping'))
                 ->columns(2)
                 ->columnSpanFull()
                 ->schema([
@@ -133,7 +150,8 @@ class VariantsRelationManager extends RelationManager
                         ->extraAttributes(['style' => 'max-width: 30rem'], merge: true)
                         ->acceptedFileTypes(Product::IMAGE_MIME_TYPES)
                         ->maxSize(5120)
-                        ->helperText(__('pim.helper.variant_main_image')),
+                        ->helperText(__('pim.helper.variant_main_image'))
+                        ->hintAction(ExistingImagePicker::hintAction('main_image', multiple: false)),
                     SpatieMediaLibraryFileUpload::make('gallery')
                         ->label(__('pim.field.gallery'))
                         ->collection('gallery')
@@ -148,8 +166,13 @@ class VariantsRelationManager extends RelationManager
                         ->extraAttributes(['style' => 'max-width: 30rem'], merge: true)
                         ->acceptedFileTypes(Product::IMAGE_MIME_TYPES)
                         ->maxSize(5120)
+                        ->hintAction(ExistingImagePicker::hintAction('gallery', multiple: true))
                         ->columnSpanFull(),
                 ]),
+
+            // --- Custom ---
+            // TODO: sezione "Custom" (attributi personalizzati) — da
+            // implementare qui quando il modello lo supporterà.
             Select::make('taxonomyTerms')
                 ->label(__('pim.field.taxonomy_terms'))
                 ->relationship('taxonomyTerms', 'name', fn (Builder $query): Builder => $query->with('taxonomy'))
@@ -288,7 +311,7 @@ class VariantsRelationManager extends RelationManager
     }
 
     /**
-     * @return array<int, \Filament\Schemas\Components\Component>
+     * @return array<int, Component>
      */
     protected function valueSelectionSchema(): array
     {
