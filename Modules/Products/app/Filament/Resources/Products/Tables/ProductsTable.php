@@ -11,6 +11,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -21,44 +22,45 @@ use Modules\Localization\Support\Locales;
 use Modules\Pricing\Models\PriceList;
 use Modules\Products\Enums\ProductType;
 use Modules\Products\Models\Product;
-use Modules\Taxonomies\Models\Taxonomy;
-use Modules\Taxonomies\Models\TaxonomyTerm;
+use Modules\Products\Support\ProductListQuery;
 
 class ProductsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
-            // Top-level products only: variants are managed inside their parent.
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query
-                ->whereNull('parent_id')
-                ->withCount('variants')
-                ->with(['translations', 'taxonomyTerms.taxonomy', 'media']))
+            // Top-level products only + the list's eager loads. Shared with the
+            // export so the two never diverge — see ProductListQuery.
+            ->modifyQueryUsing(fn (Builder $query): Builder => ProductListQuery::applyBase($query))
+            // The generic toolbar search box is gone; name/SKU search lives in
+            // the filter drawer as the `search` filter below.
+            ->searchable(false)
+            // Every column is freely toggleable from the column manager — no
+            // column is locked visible.
             ->columns([
                 ImageColumn::make('main_image')
                     ->label(__('pim.field.image'))
                     ->getStateUsing(fn (Product $record): ?string => $record->getMainImageUrl('thumb'))
                     ->imageSize(40)
                     ->square()
-                    ->defaultImageUrl(fn (): string => asset('images/placeholder-product.svg')),
+                    ->defaultImageUrl(fn (): string => asset('images/placeholder-product.svg'))
+                    ->toggleable(),
                 TextColumn::make('name_base')
                     ->label(__('pim.field.name'))
                     ->getStateUsing(fn (Product $record): ?string => $record->translate(Locales::baseCode())?->name)
-                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas(
-                        'translations',
-                        fn (Builder $q) => $q->where('language_id', Locales::idFor(Locales::baseCode()))
-                            ->where('name', 'like', "%{$search}%"),
-                    )),
+                    ->toggleable(),
                 TextColumn::make('type')
                     ->label(__('pim.field.type'))
                     ->badge()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('variants_count')
                     ->label(__('pim.field.variants'))
                     ->tooltip(__('pim.tooltip.variants_count'))
                     ->formatStateUsing(fn (int $state, Product $record): string => $record->isVariable()
                         ? trans_choice('pim.column.variants_count', $state, ['count' => $state])
-                        : '—'),
+                        : '—')
+                    ->toggleable(),
                 TextColumn::make('translated_locales')
                     ->label(__('pim.field.translations'))
                     ->badge()
@@ -76,7 +78,8 @@ class ProductsTable
                     })
                     ->color(fn (string $state): string => $state === strtoupper(Locales::baseCode()) ? 'primary' : 'gray')
                     ->placeholder('—')
-                    ->tooltip(__('pim.tooltip.translated_languages')),
+                    ->tooltip(__('pim.tooltip.translated_languages'))
+                    ->toggleable(),
                 TextColumn::make('taxonomy_terms')
                     ->label(__('pim.field.terms'))
                     ->badge()
@@ -89,11 +92,10 @@ class ProductsTable
                     ->toggleable(),
                 TextColumn::make('sku')
                     ->label(__('pim.field.sku'))
-                    ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('external_id')
                     ->label(__('pim.field.external_id'))
-                    ->searchable()
                     ->toggleable(),
                 TextColumn::make('stock')
                     ->label(__('pim.field.stock'))
@@ -137,7 +139,8 @@ class ProductsTable
                         'active' => 'success',
                         'archived' => 'danger',
                         default => 'gray',
-                    }),
+                    })
+                    ->toggleable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -147,31 +150,37 @@ class ProductsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            // Rendered by our own bottom drawer in the page view; Filament must
+            // not also render a trigger/panel of its own.
+            ->filtersLayout(FiltersLayout::Hidden)
             ->filtersFormColumns(2)
+            // Every filter's query lives in ProductListQuery so the export can
+            // replay the exact same clauses from a saved filter snapshot.
             ->filters([
+                self::searchFilter(),
                 SelectFilter::make('type')
                     ->label(__('pim.filter.type'))
                     ->options(collect(ProductType::cases())
                         ->mapWithKeys(fn (ProductType $type): array => [$type->value => $type->getLabel()])
-                        ->all()),
+                        ->all())
+                    ->query(fn (Builder $query, array $data): Builder => ProductListQuery::type($query, $data)),
                 SelectFilter::make('status')
                     ->label(__('pim.field.status'))
                     ->options([
                         'draft' => __('pim.option.status.draft'),
                         'active' => __('pim.option.status.active'),
                         'archived' => __('pim.option.status.archived'),
-                    ]),
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => ProductListQuery::status($query, $data)),
                 SelectFilter::make('missing_translation')
                     ->label(__('pim.filter.missing_translation'))
-                    ->options(fn (): array => Locales::active()
-                        ->mapWithKeys(fn (Language $language): array => [$language->code => $language->name])
-                        ->all())
-                    ->query(fn (Builder $query, array $data): Builder => filled($data['value'] ?? null)
-                        ? $query->whereDoesntHave(
-                            'translations',
-                            fn (Builder $relation): Builder => $relation->where('language_id', Locales::idFor($data['value'])),
-                        )
-                        : $query),
+                    ->options(fn (): array => [
+                        '*' => __('pim.filter.missing_translation_any'),
+                        ...Locales::active()
+                            ->mapWithKeys(fn (Language $language): array => [$language->code => $language->name])
+                            ->all(),
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => ProductListQuery::missingTranslation($query, $data)),
                 self::taxonomyFilter(),
                 self::priceFilter(),
                 self::stockFilter(),
@@ -208,6 +217,28 @@ class ProductsTable
     }
 
     /**
+     * Free-text search on the base-language name or the SKU. Replaces the
+     * generic toolbar search box, deferred like every other filter.
+     */
+    protected static function searchFilter(): Filter
+    {
+        return Filter::make('search')
+            ->label(__('pim.field.search'))
+            ->schema([
+                TextInput::make('term')
+                    ->label(__('pim.field.search'))
+                    ->placeholder(__('pim.grid.search_placeholder'))
+                    ->columnSpanFull(),
+            ])
+            ->query(fn (Builder $query, array $data): Builder => ProductListQuery::search($query, $data))
+            ->indicateUsing(function (array $data): ?string {
+                $term = trim((string) ($data['term'] ?? ''));
+
+                return $term === '' ? null : __('pim.field.search').': '.$term;
+            });
+    }
+
+    /**
      * Faceted taxonomy filter: AND across taxonomies, OR within one, each
      * selected term expanded to its subtree.
      */
@@ -222,30 +253,7 @@ class ProductsTable
                     ->searchable()
                     ->options(fn (): array => self::taxonomyTermOptions()),
             ])
-            ->query(function (Builder $query, array $data): Builder {
-                $ids = array_values(array_filter(array_map('intval', $data['terms'] ?? [])));
-
-                if ($ids === []) {
-                    return $query;
-                }
-
-                $byTaxonomy = [];
-
-                foreach (TaxonomyTerm::query()->whereIn('id', $ids)->get() as $term) {
-                    $subtree = [$term->getKey(), ...$term->descendantIds()];
-                    $byTaxonomy[$term->taxonomy_id] = array_merge($byTaxonomy[$term->taxonomy_id] ?? [], $subtree);
-                }
-
-                foreach ($byTaxonomy as $termIds) {
-                    $query->whereHas(
-                        'taxonomyTerms',
-                        fn (Builder $relation): Builder => $relation
-                            ->whereIn('taxonomy_terms.id', array_values(array_unique($termIds))),
-                    );
-                }
-
-                return $query;
-            })
+            ->query(fn (Builder $query, array $data): Builder => ProductListQuery::taxonomyTerms($query, $data))
             ->indicateUsing(function (array $data): ?string {
                 $ids = array_filter($data['terms'] ?? []);
 
@@ -295,34 +303,7 @@ class ProductsTable
                     ->numeric()
                     ->minValue(0),
             ])
-            ->query(function (Builder $query, array $data): Builder {
-                $listId = (int) ($data['price_list_id'] ?? 0)
-                    ?: (int) (PriceList::query()->where('is_default', true)->value('id') ?? 0);
-
-                if ($listId === 0) {
-                    return $query;
-                }
-
-                $presence = $data['presence'] ?? null;
-                $min = filled($data['min'] ?? null) ? (float) $data['min'] : null;
-                $max = filled($data['max'] ?? null) ? (float) $data['max'] : null;
-
-                if ($presence === 'without') {
-                    return $query->whereDoesntHave(
-                        'prices',
-                        fn (Builder $relation): Builder => $relation->where('price_list_id', $listId),
-                    );
-                }
-
-                if ($presence === 'with' || $min !== null || $max !== null) {
-                    return $query->whereHas('prices', fn (Builder $relation): Builder => $relation
-                        ->where('price_list_id', $listId)
-                        ->when($min !== null, fn (Builder $q): Builder => $q->where('price', '>=', $min))
-                        ->when($max !== null, fn (Builder $q): Builder => $q->where('price', '<=', $max)));
-                }
-
-                return $query;
-            })
+            ->query(fn (Builder $query, array $data): Builder => ProductListQuery::price($query, $data))
             ->indicateUsing(function (array $data): ?string {
                 $parts = [];
 
@@ -366,11 +347,7 @@ class ProductsTable
                         'low' => __('pim.option.stock.low', ['threshold' => $threshold]),
                     ]),
             ])
-            ->query(fn (Builder $query, array $data): Builder => match ($data['level'] ?? null) {
-                'zero' => $query->whereNotNull('stock')->where('stock', 0),
-                'low' => $query->whereNotNull('stock')->whereBetween('stock', [1, $threshold]),
-                default => $query,
-            })
+            ->query(fn (Builder $query, array $data): Builder => ProductListQuery::stock($query, $data))
             ->indicateUsing(fn (array $data): ?string => match ($data['level'] ?? null) {
                 'zero' => __('pim.field.stock').': '.__('pim.option.stock.zero'),
                 'low' => __('pim.field.stock').': '.__('pim.option.stock.low', ['threshold' => $threshold]),
@@ -380,19 +357,13 @@ class ProductsTable
 
     /**
      * Term id => "Taxonomy: Term", grouped by taxonomy in a stable order.
+     * Kept here for the bulk "assign taxonomy terms" action; the canonical
+     * implementation lives in ProductListQuery.
      *
      * @return array<int, string>
      */
     public static function taxonomyTermOptions(): array
     {
-        $options = [];
-
-        foreach (Taxonomy::query()->with(['translations', 'terms.translations'])->get() as $taxonomy) {
-            foreach ($taxonomy->terms as $term) {
-                $options[$term->id] = "{$taxonomy->name}: {$term->name}";
-            }
-        }
-
-        return $options;
+        return ProductListQuery::taxonomyTermOptions();
     }
 }

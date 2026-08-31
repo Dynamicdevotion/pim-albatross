@@ -643,6 +643,239 @@ older than `prune_days` (7); the `ImportRecord` rows (the reports) are kept.
 
 ---
 
+## ExportProdotti module
+
+Exports products to **CSV or XLSX**, the natural complement of ImportGestionali
+— a file exported here can be fed straight back into the importer (same column
+vocabulary as `TargetField`).
+
+Structure (`Modules/ExportProdotti/`):
+
+```
+app/
+├── Filament/
+│   ├── ExportProdottiPanelPlugin.php         # discoverResources
+│   └── Resources/ExportRecords/              # read-only run history + report/download page
+├── Enums/ExportColumn.php                    # sku / name / description / price / stock / weight / length / width / height / status / image_url / gallery_urls
+├── Jobs/RunProductExport.php                 # queued run for large catalogues
+├── Models/ExportRecord.php                   # one export run + its outcome
+├── Console/PruneExportFilesCommand.php       # exportprodotti:prune-files
+└── Support/
+    ├── SpreadsheetWriter.php                 # openspout wrapper: streaming CSV / XLSX writer
+    ├── ProductExportRow.php                  # one Product (or variant) → the ordered cell values
+    └── ExportRunner.php                      # build the query, stream it to the file, keep the record current
+config/config.php                             # inline_max_rows, disk, prune_days
+database/migrations/2026_08_31_120000_create_export_records_table.php
+```
+
+### The "Esporta" action (products list)
+
+`ListProducts` renders an **Esporta** button next to the Filters / Columns
+controls. It opens a **slide-over** (native Filament action modal — not the
+bespoke filter drawer) with:
+
+- **Formato** — CSV or XLSX (XLSX pre-selected);
+- **Colonne da includere** — a `CheckboxList` of the twelve `ExportColumn`
+  values, pre-ticked from the columns currently visible in the list (the
+  column-manager state: `sku`, `name` → base name, `stock`, the four
+  dimensions, `status`, `main_image` → `image_url`; export-only columns
+  `description` / `price` / `gallery_urls` have no list column and start
+  unticked). If nothing maps, it falls back to `sku, name, price, stock,
+  status`.
+
+**What is exported**
+
+- **Every product matching the filters currently applied to the list**
+  (`ProductListQuery` — the same faceted taxonomy / price / stock / search /
+  type / status / missing-translation clauses the drawer uses), pagination
+  ignored.
+- **Variants as their own rows**: a `variable` container is written as one row
+  (its own name / status / images; no price, stock or dimensions), followed by
+  one row per child variant with the variant's own SKU / price / stock /
+  dimensions and its own-or-inherited name and images.
+- `name` / `description` are the **base-language** translation; `price` is the
+  amount on the **default price list**, formatted `1234.56`; `image_url` is the
+  public URL of the main image (a variant inherits the parent's), `gallery_urls`
+  is the gallery URLs joined with `|`. All values are chosen so the file
+  round-trips through ImportGestionali.
+
+### Inline vs queued
+
+The matching **top-level** product count (before variant expansion) decides:
+
+| | |
+|---|---|
+| ≤ `inline_max_rows` (**1000**) | generated in the request, streamed straight to the browser as a download |
+| > 1000 | an `ExportRecord` is created, `RunProductExport` is queued, and the user is sent to the run's report page, which polls (`wire:poll`) until the file is ready and then shows a **Scarica** button |
+
+Same Netsons caveat as the importer: the queue only drains through the cron
+`* * * * * cd ~/apps/pim && php artisan schedule:run` — without it a large
+export stays `pending`, while everything up to 1000 products still works inline.
+`exportprodotti:prune-files` (scheduled `dailyAt('03:20')`) deletes generated
+files older than `prune_days` (7); the `ExportRecord` rows are kept.
+
+### `ProductListQuery` (Products module)
+
+`Modules\Products\Support\ProductListQuery` is the **single source of truth** for
+the products-list query: the base scope (`applyBase()` — top-level rows +
+eager loads, wired into the table's `modifyQueryUsing`) and one static method
+per filter clause. `ProductsTable` routes every filter's `query()` to it, and
+`ExportRunner::query()` rebuilds the identical query from a saved `tableFilters`
+snapshot — so an export can never drift from what the list shows.
+
+### `export_records` table
+
+| Column | Notes |
+|---|---|
+| `user_id` | FK → `users`, `nullOnDelete` |
+| `format` | `csv` / `xlsx` |
+| `columns` | json — the chosen `ExportColumn` keys, stored in canonical order |
+| `filters` | json — the `tableFilters` snapshot the list was showing |
+| `sort` | json — `{column, direction}` or null |
+| `status` | `pending` → `processing` → `completed` \| `failed` |
+| `total_rows` | top-level products matched (variant rows added on top at write time) |
+| `row_count` | data rows actually written |
+| `stored_path` | on the export disk; nulled by the prune command |
+| `original_filename` | `export-prodotti-YYYYMMDD-HHMMSS.<ext>` |
+| `error_message` | set on a failed run |
+| `started_at` / `finished_at` | timestamps |
+
+---
+
+## Branding module
+
+Per-installation panel branding — one client per install, so a **single-row
+`settings` table**, no per-user / per-role variant.
+
+Structure (`Modules/Branding/`):
+
+```
+app/
+├── Models/Setting.php                    # singleton HasMedia; current() / branding() / primaryPalette()
+└── Filament/
+    ├── BrandingPanelPlugin.php           # wires brandName / brandLogo / colors + discoverPages
+    └── Pages/ManageBranding.php          # the "Branding" settings page
+database/migrations/2026_08_31_130000_create_settings_table.php
+```
+
+### `Setting` (single row)
+
+| Column | Notes |
+|---|---|
+| `brand_name` | nullable — company / product name (e.g. "Albatross") |
+| `primary_color` | nullable — hex `#rrggbb` |
+
+The logo is a Spatie Media Library `singleFile` collection `logo` (jpg / png /
+webp, max 5 MB, `public` disk) — same setup as the product images.
+
+- **`Setting::current()`** — the one row, `firstOrCreate`d on first access. Used
+  by the settings page (the media upload needs a real model to bind to).
+- **`Setting::branding()`** — a `Cache::rememberForever` snapshot
+  `['brand_name', 'primary_color', 'logo_url']`, safe before the table exists.
+  This is what the panel closures read on every request; the cache is flushed
+  by the model's `saved` / `deleted` events and explicitly by the settings page
+  after a logo-only change.
+- **`Setting::primaryPalette()`** — `Color::hex($primary_color)` expanded to
+  shades, or `Color::Amber` (the historical default) when unset or malformed.
+
+### `ManageBranding` page (`/admin/impostazioni`, "Impostazioni" nav group)
+
+A form: `SpatieMediaLibraryFileUpload` (logo) + `TextInput` (name) +
+`ColorPicker` (primary colour). `mount()` fills from `Setting::current()`;
+`save()` calls `$this->form->getState()` (which persists the logo via the
+schema's `saveRelationships()`), updates the two columns and flushes the cache.
+
+`canAccess()` returns `true` for now — **TODO: restringere agli admin quando
+arriva il sistema di permessi** (noted in the class).
+
+### Panel wiring (`BrandingPanelPlugin`)
+
+```php
+$panel
+    ->brandName(fn () => Setting::branding()['brand_name'] ?: config('app.name'))
+    ->brandLogo(fn () => Setting::branding()['logo_url'])
+    ->brandLogoHeight('2rem')
+    ->colors(fn () => ['primary' => Setting::primaryPalette()]);
+```
+
+All closures — re-evaluated per request from the cached snapshot, so a save
+takes effect immediately with **no `filament:optimize-clear` needed**. Filament
+shows the logo `<img>` when `brandLogo` is a URL and falls back to the
+`brandName` text otherwise, so "logo, else text name, never empty" is the
+stock behaviour. `AdminPanelProvider` keeps `->colors(['primary' => Color::Amber])`
+as the base; the plugin appends the dynamic `primary` (itself Amber-defaulting).
+
+---
+
+## Dashboard module
+
+Replaces the stock Filament dashboard (`AccountWidget` / `FilamentInfoWidget`,
+removed from `AdminPanelProvider`) with a catalogue overview. Everything that
+can be is a link.
+
+Structure (`Modules/Dashboard/app/Filament/`):
+
+```
+DashboardPanelPlugin.php                  # $panel->widgets([...])
+Widgets/
+├── ProductOverviewStats.php              # StatsOverviewWidget — status numbers
+├── ProductsByCategoryChart.php           # ChartWidget (bar) — clickable
+├── ProductsMissingImage.php              # TableWidget — recent, no main image
+└── RecentImportIssues.php                # Widget (blade) — last import's skipped rows
+```
+
+### `ProductOverviewStats`
+
+Six `Stat`s, each counted through `ProductListQuery::for($filters)` and linking
+to `ProductResource::getUrl('index', ['filters' => $filters])` with the **same
+`$filters`** — so the number and the list it opens always agree:
+
+| Stat | `$filters` |
+|---|---|
+| Prodotti attivi / Bozze / Archiviati | `status.value = active` / `draft` / `archived` |
+| Senza prezzo | `price.presence = without` + `price.price_list_id = <default>` — only shown when a default price list exists |
+| Stock a zero | `stock.level = zero` |
+| Traduzione mancante | `missing_translation.value = *` (see below) |
+
+### `missing_translation` — the `*` option
+
+`ProductListQuery::missingTranslation()` accepts, besides a language code, the
+value **`'*'`** — products missing a translation in *at least one* active
+language:
+
+```php
+whereHas('translations',
+    fn ($q) => $q->whereIn('language_id', $activeIds),
+    '<', count($activeIds));
+```
+
+(products with no translations included). It is also a real option in the
+products filter drawer, labelled *"Una qualsiasi lingua attiva"*.
+
+### `ProductsByCategoryChart`
+
+Bar chart of product count per term of the `categoria` taxonomy. Each bar's
+value is `ProductListQuery::for(['taxonomy_terms' => ['terms' => [$term->id]]])
+->count()` — the same clause (subtree expansion included) the bar links to, so
+clicking a bar opens the list showing exactly that many rows. The click is a
+Chart.js `onClick` in `getOptions()` (`RawJs`) reading a `urls` array carried on
+the dataset. Empty (no bars) when there is no `categoria` taxonomy.
+
+### `ProductsMissingImage`
+
+`TableWidget` — the 8 most recently created top-level products with no
+`main_image` media. `recordUrl` → the product form.
+
+### `RecentImportIssues`
+
+A blade widget: the most recent **completed** `ImportRecord` with
+`skipped_count > 0`, its first 10 `issues` lines, and a link to that run's
+report (`ImportRecordResource::getUrl('view', …)`). Skipped rows are an
+import-only concept, so this always points at ImportRecords. Empty state when
+no recent import dropped any rows.
+
+---
+
 ## Interface localization
 
 The **panel UI** (labels, buttons, notifications) is translatable, separately

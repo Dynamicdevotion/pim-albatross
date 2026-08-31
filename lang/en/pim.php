@@ -96,6 +96,7 @@ return [
 
     'filter' => [
         'missing_translation' => 'Missing translation',
+        'missing_translation_any' => 'Any active language',
         'price' => 'Price',
         'type' => 'Type',
         'variant_scope' => 'Variants',
@@ -308,6 +309,142 @@ return [
             'empty' => 'empty file',
             'too_large' => 'over the size limit',
             'bad_type' => 'unsupported format (:type) — allowed: JPG, PNG, WebP',
+        ],
+    ],
+
+    // ExportProdotti module — export products to CSV/XLSX.
+    'export' => [
+        'nav' => [
+            'group' => 'Export',
+            'history' => 'Export results',
+        ],
+        'record' => [
+            'label' => 'Export result',
+            'plural' => 'Export results',
+        ],
+        'action' => [
+            'trigger' => 'Export',
+            'download' => 'Download',
+        ],
+        'modal' => [
+            'heading' => 'Export products',
+            'description' => 'Every product matching the filters currently applied to the list is exported, with no page limit. Variants of variable products are included as separate rows.',
+            'submit' => 'Export',
+            'summary' => '{0} No product matches the current filters|{1} :count product matches the current filters|[2,*] :count products match the current filters',
+        ],
+        'field' => [
+            'format' => 'Format',
+            'columns' => 'Columns to include',
+        ],
+        'format' => [
+            'xlsx' => 'Excel (.xlsx)',
+            'csv' => 'CSV (.csv)',
+        ],
+        'column' => [
+            'sku' => 'SKU',
+            'name' => 'Name (base language)',
+            'description' => 'Description (base language)',
+            'price' => 'Price (default price list)',
+            'stock' => 'Stock',
+            'weight' => 'Weight',
+            'length' => 'Length',
+            'width' => 'Width',
+            'height' => 'Height',
+            'status' => 'Status',
+            'image_url' => 'Main image (URL)',
+            'gallery_urls' => 'Gallery (URLs separated by |)',
+        ],
+        'notify' => [
+            'queued' => 'Export started: the catalogue is large, processing continues in the background. You can follow its progress on this page.',
+        ],
+        'status' => [
+            'pending' => 'Queued',
+            'processing' => 'Running',
+            'completed' => 'Completed',
+            'failed' => 'Failed',
+        ],
+        'col' => [
+            'when' => 'Date',
+            'user' => 'User',
+            'format' => 'Format',
+            'columns' => 'Columns',
+            'rows' => 'Rows',
+        ],
+        'report' => [
+            'summary' => 'Summary',
+            'started' => 'Started',
+            'finished' => 'Finished',
+            'rows' => 'Rows exported',
+            'columns' => 'Columns',
+            'error' => 'Error',
+            'running_hint' => 'The export is still running. This page refreshes itself; the download button appears as soon as the file is ready.',
+        ],
+        'error' => [
+            'unexpected' => 'Unexpected error while exporting.',
+        ],
+    ],
+
+    // Branding module — panel appearance (single `settings` row).
+    'branding' => [
+        'nav' => [
+            'group' => 'Settings',
+            'label' => 'Branding',
+        ],
+        'page' => [
+            'title' => 'Branding & appearance',
+        ],
+        'section' => [
+            'identity' => 'Panel identity',
+            'identity_hint' => 'Logo, name and colour used in the admin header and theme.',
+        ],
+        'field' => [
+            'logo' => 'Logo',
+            'brand_name' => 'Company / product name',
+            'primary_color' => 'Primary colour',
+        ],
+        'help' => [
+            'logo' => 'Shown in the header instead of the text name. JPG, PNG or WebP, max 5 MB.',
+            'brand_name' => 'Used in the header when no logo has been uploaded.',
+            'primary_color' => 'Applied to theme buttons, links and accents. Empty = default colour (amber).',
+        ],
+        'action' => [
+            'save' => 'Save',
+        ],
+        'notification' => [
+            'saved' => 'Branding settings saved',
+        ],
+    ],
+
+    // Dashboard module — catalogue overview on the panel home.
+    'dashboard' => [
+        'stat' => [
+            'active' => 'Active products',
+            'draft' => 'Drafts',
+            'archived' => 'Archived',
+            'no_price' => 'No price',
+            'no_price_hint' => 'No price on the ":list" list',
+            'stock_zero' => 'Out of stock',
+            'missing_translation' => 'Missing translation',
+        ],
+        'col' => [
+            'created' => 'Created on',
+        ],
+        'missing_image' => [
+            'heading' => 'Recent products without an image',
+            'empty' => 'Every recent product has a main image.',
+        ],
+        'import_issues' => [
+            'heading' => 'Rows dropped by the last import',
+            'view_report' => 'View full report',
+            'subheading' => 'Import ":file" on :date — :count rows dropped.',
+            'more' => '…and :count more rows.',
+            'empty' => 'No recent import dropped any rows.',
+        ],
+        'chart' => [
+            'category' => [
+                'heading' => 'Products by category',
+                'dataset' => 'Products',
+            ],
         ],
     ],
 ];

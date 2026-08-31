@@ -96,6 +96,7 @@ return [
 
     'filter' => [
         'missing_translation' => 'Traduzione mancante',
+        'missing_translation_any' => 'Una qualsiasi lingua attiva',
         'price' => 'Prezzo',
         'type' => 'Tipo',
         'variant_scope' => 'Varianti',
@@ -308,6 +309,142 @@ return [
             'empty' => 'file vuoto',
             'too_large' => 'oltre il limite di dimensione',
             'bad_type' => 'formato non supportato (:type) — ammessi JPG, PNG, WebP',
+        ],
+    ],
+
+    // Modulo ExportProdotti — export prodotti in CSV/XLSX.
+    'export' => [
+        'nav' => [
+            'group' => 'Export',
+            'history' => 'Esiti export',
+        ],
+        'record' => [
+            'label' => 'Esito export',
+            'plural' => 'Esiti export',
+        ],
+        'action' => [
+            'trigger' => 'Esporta',
+            'download' => 'Scarica',
+        ],
+        'modal' => [
+            'heading' => 'Esporta prodotti',
+            'description' => 'Vengono esportati tutti i prodotti che corrispondono ai filtri attivi nella lista, senza limiti di pagina. Le varianti dei prodotti variabili sono incluse come righe separate.',
+            'submit' => 'Esporta',
+            'summary' => '{0} Nessun prodotto corrisponde ai filtri correnti|{1} :count prodotto corrisponde ai filtri correnti|[2,*] :count prodotti corrispondono ai filtri correnti',
+        ],
+        'field' => [
+            'format' => 'Formato',
+            'columns' => 'Colonne da includere',
+        ],
+        'format' => [
+            'xlsx' => 'Excel (.xlsx)',
+            'csv' => 'CSV (.csv)',
+        ],
+        'column' => [
+            'sku' => 'SKU',
+            'name' => 'Nome (lingua base)',
+            'description' => 'Descrizione (lingua base)',
+            'price' => 'Prezzo (listino predefinito)',
+            'stock' => 'Giacenza',
+            'weight' => 'Peso',
+            'length' => 'Lunghezza',
+            'width' => 'Larghezza',
+            'height' => 'Altezza',
+            'status' => 'Stato',
+            'image_url' => 'Immagine principale (URL)',
+            'gallery_urls' => 'Galleria (URL separati da |)',
+        ],
+        'notify' => [
+            'queued' => 'Export avviato: il catalogo è grande, l\'elaborazione prosegue in coda. Puoi seguire l\'avanzamento in questa pagina.',
+        ],
+        'status' => [
+            'pending' => 'In coda',
+            'processing' => 'In corso',
+            'completed' => 'Completato',
+            'failed' => 'Fallito',
+        ],
+        'col' => [
+            'when' => 'Data',
+            'user' => 'Utente',
+            'format' => 'Formato',
+            'columns' => 'Colonne',
+            'rows' => 'Righe',
+        ],
+        'report' => [
+            'summary' => 'Riepilogo',
+            'started' => 'Iniziato',
+            'finished' => 'Terminato',
+            'rows' => 'Righe esportate',
+            'columns' => 'Colonne',
+            'error' => 'Errore',
+            'running_hint' => 'L\'export è ancora in corso. La pagina si aggiorna da sola; il pulsante di download compare appena il file è pronto.',
+        ],
+        'error' => [
+            'unexpected' => 'Errore imprevisto durante l\'export.',
+        ],
+    ],
+
+    // Modulo Branding — aspetto del pannello (riga singola `settings`).
+    'branding' => [
+        'nav' => [
+            'group' => 'Impostazioni',
+            'label' => 'Branding',
+        ],
+        'page' => [
+            'title' => 'Branding e aspetto',
+        ],
+        'section' => [
+            'identity' => 'Identità del pannello',
+            'identity_hint' => 'Logo, nome e colore usati nell\'intestazione e nel tema dell\'area di amministrazione.',
+        ],
+        'field' => [
+            'logo' => 'Logo',
+            'brand_name' => 'Nome azienda / prodotto',
+            'primary_color' => 'Colore primario',
+        ],
+        'help' => [
+            'logo' => 'Mostrato nell\'intestazione al posto del testo. JPG, PNG o WebP, max 5 MB.',
+            'brand_name' => 'Usato nell\'intestazione quando non è caricato alcun logo.',
+            'primary_color' => 'Applicato a bottoni, link e accenti del tema. Vuoto = colore predefinito (ambra).',
+        ],
+        'action' => [
+            'save' => 'Salva',
+        ],
+        'notification' => [
+            'saved' => 'Impostazioni di branding salvate',
+        ],
+    ],
+
+    // Modulo Dashboard — panoramica catalogo nella home del pannello.
+    'dashboard' => [
+        'stat' => [
+            'active' => 'Prodotti attivi',
+            'draft' => 'Bozze',
+            'archived' => 'Archiviati',
+            'no_price' => 'Senza prezzo',
+            'no_price_hint' => 'Nessun prezzo sul listino «:list»',
+            'stock_zero' => 'Stock a zero',
+            'missing_translation' => 'Traduzione mancante',
+        ],
+        'col' => [
+            'created' => 'Creato il',
+        ],
+        'missing_image' => [
+            'heading' => 'Prodotti recenti senza immagine',
+            'empty' => 'Tutti i prodotti recenti hanno un\'immagine principale.',
+        ],
+        'import_issues' => [
+            'heading' => 'Righe scartate nell\'ultimo import',
+            'view_report' => 'Vedi report completo',
+            'subheading' => 'Import «:file» del :date — :count righe scartate.',
+            'more' => '…e altre :count righe.',
+            'empty' => 'Nessun import recente con righe scartate.',
+        ],
+        'chart' => [
+            'category' => [
+                'heading' => 'Prodotti per categoria',
+                'dataset' => 'Prodotti',
+            ],
         ],
     ],
 ];

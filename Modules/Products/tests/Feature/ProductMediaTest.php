@@ -150,14 +150,19 @@ class ProductMediaTest extends TestCase
             ->assertHasFormErrors(['main_image']);
     }
 
-    public function test_products_list_has_an_always_visible_image_column(): void
+    public function test_every_products_list_column_is_freely_toggleable(): void
     {
         $component = Livewire::test(ListProducts::class)
             ->assertTableColumnExists('main_image')
             ->assertCanRenderTableColumn('main_image');
 
-        $this->assertFalse(
-            $component->instance()->getTable()->getColumn('main_image')->isToggleable(),
-        );
+        // No column is locked visible: the column manager can hide any of them,
+        // the image column included.
+        foreach ($component->instance()->getTable()->getColumns() as $column) {
+            $this->assertTrue(
+                $column->isToggleable(),
+                "Column [{$column->getName()}] should be toggleable.",
+            );
+        }
     }
 }

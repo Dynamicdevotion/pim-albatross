@@ -12,7 +12,8 @@ Artisan::command('inspire', function () {
  * Netsons has no long-running queue worker. A single cPanel cron
  *   * * * * * cd ~/apps/pim && php artisan schedule:run >> /dev/null 2>&1
  * drains the queue once a minute (drains and exits) and prunes old
- * import source files. Large ImportGestionali imports rely on this.
+ * import/export files. Large ImportGestionali and ExportProdotti runs rely
+ * on this.
  */
 Schedule::command('queue:work --stop-when-empty --max-time=50 --tries=1 --sleep=1')
     ->everyMinute()
@@ -20,3 +21,4 @@ Schedule::command('queue:work --stop-when-empty --max-time=50 --tries=1 --sleep=
     ->runInBackground();
 
 Schedule::command('importgestionali:prune-files')->dailyAt('03:10');
+Schedule::command('exportprodotti:prune-files')->dailyAt('03:20');

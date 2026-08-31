@@ -1,0 +1,11 @@
+{
+    "name": "Branding",
+    "alias": "branding",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Branding\\Providers\\BrandingServiceProvider"
+    ],
+    "files": []
+}
