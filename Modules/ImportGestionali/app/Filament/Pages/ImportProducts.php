@@ -23,12 +23,12 @@ use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
-use Modules\ImportGestionali\Enums\TargetField;
 use Modules\ImportGestionali\Filament\Resources\ImportRecords\ImportRecordResource;
 use Modules\ImportGestionali\Jobs\RunProductImport;
 use Modules\ImportGestionali\Models\ImportRecord;
 use Modules\ImportGestionali\Support\FieldGuesser;
 use Modules\ImportGestionali\Support\ImportRunner;
+use Modules\ImportGestionali\Support\MappingTarget;
 use Modules\ImportGestionali\Support\ProductRowImporter;
 use Modules\ImportGestionali\Support\RowMapper;
 use Modules\ImportGestionali\Support\RowOutcome;
@@ -85,7 +85,11 @@ class ImportProducts extends Page
 
     public function mount(): void
     {
-        $this->form->fill(['update_existing' => false]);
+        $this->form->fill([
+            'update_existing' => false,
+            'create_missing_terms' => false,
+            'replace_taxonomy_terms' => false,
+        ]);
     }
 
     public function form(Schema $schema): Schema
@@ -220,8 +224,10 @@ class ImportProducts extends Page
         $this->delimiter = $shape->delimiter;
         $this->encoding = $shape->encoding;
 
-        $this->data['mapping'] = FieldGuesser::forHeader($shape->header);
+        $this->data['mapping'] = FieldGuesser::forHeader($shape->header, MappingTarget::taxonomyNames());
         $this->data['update_existing'] ??= false;
+        $this->data['create_missing_terms'] ??= false;
+        $this->data['replace_taxonomy_terms'] ??= false;
     }
 
     /**
@@ -241,7 +247,7 @@ class ImportProducts extends Page
             $selects[] = Select::make("mapping.{$index}")
                 ->label($header)
                 ->native(false)
-                ->options(TargetField::selectOptions())
+                ->options(MappingTarget::selectOptions())
                 ->helperText($samples !== '' ? __('pim.import.help.sample', ['values' => Str::limit($samples, 60)]) : null);
         }
 
@@ -253,6 +259,14 @@ class ImportProducts extends Page
             Toggle::make('update_existing')
                 ->label(__('pim.import.field.update_existing'))
                 ->helperText(__('pim.import.help.update_existing'))
+                ->default(false),
+            Toggle::make('create_missing_terms')
+                ->label(__('pim.import.field.create_missing_terms'))
+                ->helperText(__('pim.import.help.create_missing_terms'))
+                ->default(false),
+            Toggle::make('replace_taxonomy_terms')
+                ->label(__('pim.import.field.replace_taxonomy_terms'))
+                ->helperText(__('pim.import.help.replace_taxonomy_terms'))
                 ->default(false),
         ];
     }
@@ -278,7 +292,7 @@ class ImportProducts extends Page
         if ($duplicates !== []) {
             throw ValidationException::withMessages([
                 'data.mapping' => __('pim.import.error.field_mapped_twice', [
-                    'field' => __('pim.import.field.'.$duplicates[0]),
+                    'field' => MappingTarget::label($duplicates[0], MappingTarget::taxonomyNames()),
                 ]),
             ]);
         }
@@ -295,7 +309,10 @@ class ImportProducts extends Page
 
         $mapping = $this->data['mapping'] ?? [];
         $updateExisting = (bool) ($this->data['update_existing'] ?? false);
-        $importer = ProductRowImporter::make();
+        $importer = ProductRowImporter::make(
+            (bool) ($this->data['create_missing_terms'] ?? false),
+            (bool) ($this->data['replace_taxonomy_terms'] ?? false),
+        );
         $seen = [];
         $out = [];
 
@@ -337,6 +354,8 @@ class ImportProducts extends Page
             'stored_path' => $this->storedPath,
             'status' => 'pending',
             'update_existing' => (bool) ($this->data['update_existing'] ?? false),
+            'create_missing_terms' => (bool) ($this->data['create_missing_terms'] ?? false),
+            'replace_taxonomy_terms' => (bool) ($this->data['replace_taxonomy_terms'] ?? false),
             'mapping' => $mapping,
             'meta' => [
                 'header' => $this->fileHeader,
@@ -347,7 +366,7 @@ class ImportProducts extends Page
         ]);
 
         // An image column means one HTTP download per row — always off the
-        // request, regardless of row count.
+        // request, regardless of row count. Taxonomies stay in the request.
         $hasImages = (bool) array_intersect(['image_url', 'gallery_urls'], $mapping);
         $inlineMax = (int) config('importgestionali.inline_max_rows', 300);
 

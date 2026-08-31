@@ -492,7 +492,8 @@ Reusable per-user snapshots of a screen's filters + visible columns.
 ## ImportGestionali module
 
 Imports **simple** products from a CSV / Excel export with a visual column
-mapping. First pass only — no variants, taxonomies or multi-list pricing.
+mapping. Simple products only (no variants) and single-list pricing; a column
+can also be mapped to a taxonomy to link its terms.
 
 Structure (`Modules/ImportGestionali/`):
 
@@ -502,22 +503,27 @@ app/
 │   ├── ImportGestionaliPanelPlugin.php       # discoverPages + discoverResources
 │   ├── Pages/ImportProducts.php              # the 3-step wizard
 │   └── Resources/ImportRecords/              # read-only run history + report page
-├── Enums/TargetField.php                     # sku / name / description / price / stock / weight / length / width / height / status / image_url / gallery_urls
+├── Enums/TargetField.php                     # the 12 fixed fields: sku / name / description / price / stock / weight / length / width / height / status / image_url / gallery_urls
 ├── Jobs/RunProductImport.php                 # queued run for large files
-├── Models/ImportRecord.php                   # one import run + its outcome
+├── Models/ImportRecord.php                   # one import run + its outcome (+ the taxonomy toggles)
 ├── Console/PruneImportFilesCommand.php       # importgestionali:prune-files
 └── Support/
     ├── SpreadsheetReader.php                 # openspout wrapper: sniff + stream
-    ├── FieldGuesser.php                      # header → field, it/en synonyms
-    ├── RowMapper.php                         # mapping + positional row → [field => value]
+    ├── FieldGuesser.php                      # header → target, it/en synonyms (+ exact taxonomy-name match)
+    ├── MappingTarget.php                     # the `taxonomy:{id}` convention: parsing, labels, grouped Select options
+    ├── RowMapper.php                         # mapping + positional row → [target => value]
     ├── ProductRowImporter.php                # one row → created | updated | skipped(reason); dryRun
+    ├── TaxonomyTermResolver.php              # term names → ids within one taxonomy, create-on-miss, per-run cache
+    ├── TaxonomyResolution.php                # per-taxonomy match outcome (found / created / will_create / missing / gone)
     ├── ImportRunner.php                      # stream the file, keep the report current
     ├── ImageFetcher.php                      # download an image_url / gallery_urls entry (streamed, capped)
     ├── RowOutcome.php  /  FileShape.php  /  FetchedImage.php   # small value objects
     ├── ImageFetchException.php               # per-image failure → a report note, not a skip
     └── UnreadableImportFile.php              # translated, user-safe file-level failure
 config/config.php                             # inline_max_rows, max_file_mb, issues_cap, preview_rows, disk, prune_days, image_timeout
-database/migrations/2026_08_28_100000_create_import_records_table.php
+database/migrations/
+├── 2026_08_28_100000_create_import_records_table.php
+└── 2026_09_01_000000_add_taxonomy_toggles_to_import_records.php   # create_missing_terms, replace_taxonomy_terms
 ```
 
 ### The wizard (`/admin/import-prodotti`, "Import" nav group)
@@ -528,9 +534,14 @@ database/migrations/2026_08_28_100000_create_import_records_table.php
    delimiter and encoding. A file-level failure clears the upload and blocks the
    step (see below).
 2. **Map the columns** — one `Select` per file column (`mapping.{index}`),
-   pre-filled by `FieldGuesser` from the header. Plus the **"Update products
-   that already exist"** toggle (default off). On *Next*: exactly one column must
-   map to `sku`, and no field may be mapped twice — otherwise a clear error.
+   pre-filled by `FieldGuesser` from the header. The options are grouped:
+   *Product fields* (the 12 `TargetField` values) and *Taxonomies* — one entry
+   per existing taxonomy, `taxonomy:{id}` (see `MappingTarget`), built from
+   `Taxonomy::all()` at render time. Plus three toggles (all default off):
+   **"Update products that already exist"**, **"Create missing terms
+   automatically"**, **"Replace existing terms for the mapped taxonomies"**.
+   On *Next*: exactly one column must map to `sku`, and no target may be mapped
+   twice (mapping two columns to the same taxonomy is the same error).
 3. **Preview** — the first `preview_rows` (10) rows run through
    `ProductRowImporter` in **`dryRun`** mode and are shown with their expected
    outcome (*will be created* / *will update the existing one* / *skipped —
@@ -577,6 +588,29 @@ Media Library on the `Product` — the same collections the product form uses.
   whole collection; an empty or unmapped cell leaves it untouched.
 - The preview never downloads anything (`dryRun`).
 
+### Taxonomies (`taxonomy:{id}` columns)
+
+A column mapped to `taxonomy:{id}` holds one or more **term names** separated by
+`|` (e.g. `Rosso|Blu`). `TaxonomyTermResolver` matches each name **within that
+one taxonomy** — by base-language name (case-insensitive), then by slug — and
+links the resolved terms through the existing `product_taxonomy_term` pivot.
+
+- **"Create missing terms automatically"** (default off, mirrors *update
+  existing*): off, a name with no match is a report note (*"riga 34: termine
+  «Verde» non trovato nella tassonomia Colore, ignorato"*) and the rest of the
+  row still imports; on, the term is created as a **root** term of that taxonomy
+  (slug from the name, base-language translation) and reused by later rows in the
+  same run.
+- **"Replace existing terms for the mapped taxonomies"** (default off): off,
+  resolved terms are **added** (`syncWithoutDetaching`, like the bulk "assign
+  terms" action); on, for each mapped taxonomy the cell's terms **replace** the
+  product's current terms of that taxonomy — but only when at least one term
+  resolves, otherwise the taxonomy is left untouched. An empty cell never
+  changes anything.
+- The preview shows the expected match per taxonomy (`Colore: Rosso ✓ · Verde —
+  non trovato`), computed by the same `dryRun` path; it never writes.
+- Both toggles are stored on the `ImportRecord` so a queued run behaves the same.
+
 ### File-level failures vs row-level problems
 
 **File-level** (raised as one translated `UnreadableImportFile`, shown at the
@@ -594,7 +628,7 @@ a **skip** (the whole row is not imported) — SKU missing, SKU duplicated withi
 the file, SKU already exists (toggle off), name missing on a new product, a
 numeric field that is not a number or is negative, stock not a whole number, an
 unrecognised `status`; or a **note** on a row that *was* imported — an image URL
-that would not download.
+that would not download, a taxonomy term name that was not found.
 
 ### Report
 

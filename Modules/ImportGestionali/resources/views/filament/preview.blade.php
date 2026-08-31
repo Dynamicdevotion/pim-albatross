@@ -1,9 +1,11 @@
 @php
     use Illuminate\Support\Str;
+    use Modules\ImportGestionali\Support\TaxonomyResolution;
 
     $fieldOrder = ['sku', 'name', 'description', 'price', 'stock', 'weight', 'length', 'width', 'height', 'status'];
     $used = collect($rows)
         ->flatMap(fn ($r) => array_keys($r['values']))
+        ->reject(fn ($f) => str_starts_with($f, 'taxonomy:'))
         ->unique()
         ->sortBy(fn ($f) => array_search($f, $fieldOrder, true))
         ->values()
@@ -42,16 +44,36 @@
                                 <td class="py-2 pe-3">{{ Str::limit($row['values'][$field] ?? '', 40) ?: '—' }}</td>
                             @endforeach
                             <td class="py-2 ps-3">
-                                @if ($outcome->action === 'created')
-                                    <x-filament::badge color="success">{{ __('pim.import.preview.will_create') }}</x-filament::badge>
-                                @elseif ($outcome->action === 'updated')
-                                    <x-filament::badge color="warning">{{ __('pim.import.preview.will_update') }}</x-filament::badge>
-                                @else
-                                    <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                    @if ($outcome->action === 'created')
+                                        <x-filament::badge color="success">{{ __('pim.import.preview.will_create') }}</x-filament::badge>
+                                    @elseif ($outcome->action === 'updated')
+                                        <x-filament::badge color="warning">{{ __('pim.import.preview.will_update') }}</x-filament::badge>
+                                    @else
                                         <x-filament::badge color="danger">{{ __('pim.import.preview.will_skip') }}</x-filament::badge>
                                         <span class="text-xs text-gray-500 dark:text-gray-400">{{ $outcome->reason }}</span>
+                                    @endif
+                                </div>
+
+                                @foreach ($outcome->taxonomies as $resolution)
+                                    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        <span class="font-medium">{{ $resolution->taxonomyName ?? $resolution->taxonomyId }}:</span>
+                                        @if ($resolution->gone)
+                                            {{ __('pim.import.preview.tax_gone') }}
+                                        @else
+                                            @foreach ($resolution->terms as $term)
+                                                <span @class([
+                                                    'text-danger-600 dark:text-danger-400' => $term['status'] === TaxonomyResolution::MISSING,
+                                                ])>{{ $term['name'] }}@switch($term['status'])
+                                                        @case(TaxonomyResolution::FOUND) ✓ @break
+                                                        @case(TaxonomyResolution::CREATED)
+                                                        @case(TaxonomyResolution::WILL_CREATE) ✚ @break
+                                                        @default — {{ __('pim.import.preview.tax_missing') }}
+                                                    @endswitch</span>@if (! $loop->last) · @endif
+                                            @endforeach
+                                        @endif
                                     </div>
-                                @endif
+                                @endforeach
                             </td>
                         </tr>
                     @endforeach
