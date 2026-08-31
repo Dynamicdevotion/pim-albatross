@@ -40,12 +40,16 @@ class ProductPayload
             $this->warnings[] = __('pim.woosync.warn.no_name', ['locale' => strtoupper(Locales::baseCode())]);
         }
 
+        // No stock fields are ever sent. Inventory is one-directional,
+        // WooCommerce -> PIM: the store owns stock and WooSyncRunner writes it
+        // back onto the product. Asserting `manage_stock` here would both land
+        // every created product as "out of stock" (no quantity accompanies it)
+        // and prime the write-back to overwrite the PIM's real stock.
         $payload = [
             'name' => $translation?->name ?? (string) $this->product->sku,
             'type' => 'simple',
             'sku' => (string) $this->product->sku,
             'description' => (string) ($translation?->description ?? ''),
-            'manage_stock' => true,
         ];
 
         $payload += $this->priceFields();
