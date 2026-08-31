@@ -796,7 +796,7 @@ arriva il sistema di permessi** (noted in the class).
 
 ```php
 $panel
-    ->brandName(fn () => Setting::branding()['brand_name'] ?: config('app.name'))
+    ->brandName(fn () => Setting::branding()['brand_name'] ?: (config('app.name') ?: 'Albatross'))
     ->brandLogo(fn () => Setting::branding()['logo_url'])
     ->brandLogoHeight('2rem')
     ->colors(fn () => ['primary' => Setting::primaryPalette()]);
@@ -806,7 +806,9 @@ All closures — re-evaluated per request from the cached snapshot, so a save
 takes effect immediately with **no `filament:optimize-clear` needed**. Filament
 shows the logo `<img>` when `brandLogo` is a URL and falls back to the
 `brandName` text otherwise, so "logo, else text name, never empty" is the
-stock behaviour. `AdminPanelProvider` keeps `->colors(['primary' => Color::Amber])`
+stock behaviour. The brand name falls through brand setting → `APP_NAME` →
+the literal `Albatross` (this is the single Albatross install; `APP_NAME` is
+also set to `Albatross` in the server `.env`). `AdminPanelProvider` keeps `->colors(['primary' => Color::Amber])`
 as the base; the plugin appends the dynamic `primary` (itself Amber-defaulting).
 
 ---

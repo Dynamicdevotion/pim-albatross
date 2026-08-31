@@ -23,7 +23,10 @@ class BrandingPanelPlugin implements Plugin
     public function register(Panel $panel): void
     {
         $panel
-            ->brandName(fn (): string => Setting::branding()['brand_name'] ?: config('app.name'))
+            // Brand name, else APP_NAME, else "Albatross" (this is the single
+            // Albatross install — never fall through to a generic default).
+            ->brandName(fn (): string => Setting::branding()['brand_name']
+                ?: (config('app.name') ?: 'Albatross'))
             ->brandLogo(fn (): ?string => Setting::branding()['logo_url'])
             ->brandLogoHeight('2rem')
             ->colors(fn (): array => ['primary' => Setting::primaryPalette()])

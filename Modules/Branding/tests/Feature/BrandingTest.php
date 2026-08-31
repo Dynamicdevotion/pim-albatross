@@ -100,15 +100,18 @@ class BrandingTest extends TestCase
         $this->assertSame(Color::Amber, Setting::primaryPalette());
     }
 
-    public function test_panel_brand_name_uses_the_setting_with_a_text_fallback(): void
+    public function test_panel_brand_name_uses_the_setting_then_app_name_then_albatross(): void
     {
         $panel = Filament::getPanel('admin');
 
         $this->assertSame(config('app.name'), $panel->getBrandName());
         $this->assertNull($panel->getBrandLogo());
 
-        Setting::factory()->create(['brand_name' => 'Albatross']);
-
+        // No brand name and no APP_NAME -> explicit "Albatross", not a generic default.
+        config()->set('app.name', '');
         $this->assertSame('Albatross', $panel->getBrandName());
+
+        Setting::factory()->create(['brand_name' => 'Pim Cliente']);
+        $this->assertSame('Pim Cliente', $panel->getBrandName());
     }
 }
