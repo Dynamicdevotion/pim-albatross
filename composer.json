@@ -11,6 +11,7 @@
         "filament/filament": "^4.0",
         "filament/spatie-laravel-media-library-plugin": "^4.12",
         "laravel/framework": "^13.8",
+        "laravel/pennant": "^1.26",
         "laravel/tinker": "^3.0",
         "nwidart/laravel-modules": "^13.0",
         "spatie/laravel-medialibrary": "^11.23"
