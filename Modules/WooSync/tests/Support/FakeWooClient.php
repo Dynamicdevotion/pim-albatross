@@ -7,8 +7,13 @@ use Modules\WooSync\Contracts\WooCommerceClient;
 
 /**
  * In-memory {@see WooCommerceClient} for the runner / action tests: records
- * every call, serves canned data, and lets a test inject failures through the
- * `onCreateProduct` / `onUpdateProduct` hooks.
+ * every call and the create / update payloads, serves canned data, and lets a
+ * test inject failures through the `onGetProduct` / `onCreateProduct` /
+ * `onUpdateProduct` hooks.
+ *
+ * `createProduct` / `updateProduct` echo back the payload they were given
+ * (merged over the stored product for an update), so a test drives the stock
+ * scenario purely through `productsById` and the product's own `stock`.
  */
 class FakeWooClient implements WooCommerceClient
 {
@@ -21,13 +26,25 @@ class FakeWooClient implements WooCommerceClient
     /** @var list<array<string, mixed>> */
     public array $createdCategories = [];
 
+    /** @var list<array<string, mixed>> */
+    public array $createPayloads = [];
+
+    /** @var array<int, array<string, mixed>> keyed by woo id */
+    public array $updatePayloads = [];
+
     /** @var array<string, array<string, mixed>> keyed by SKU */
     public array $productsBySku = [];
+
+    /** @var array<int, array<string, mixed>> keyed by woo id */
+    public array $productsById = [];
 
     /** @var list<array<string, mixed>> */
     public array $categories = [];
 
     public int $nextId = 100;
+
+    /** @var (Closure(int): array<string, mixed>)|null */
+    public ?Closure $onGetProduct = null;
 
     /** @var (Closure(array<string, mixed>): array<string, mixed>)|null */
     public ?Closure $onCreateProduct = null;
@@ -54,16 +71,37 @@ class FakeWooClient implements WooCommerceClient
         return $this->productsBySku[$sku] ?? null;
     }
 
+    public function getProduct(int $wooId): array
+    {
+        $this->calls[] = 'getProduct:'.$wooId;
+
+        if ($this->onGetProduct !== null) {
+            return ($this->onGetProduct)($wooId);
+        }
+
+        // Fall back to a bare stock-managed product with no quantity, so tests
+        // that only exercise create/update routing need not register one.
+        return $this->productsById[$wooId]
+            ?? ['id' => $wooId, 'manage_stock' => true, 'stock_quantity' => null];
+    }
+
     public function createProduct(array $payload): array
     {
         $this->calls[] = 'createProduct';
+        $this->createPayloads[] = $payload;
 
         if ($this->onCreateProduct !== null) {
             return ($this->onCreateProduct)($payload);
         }
 
-        $product = $payload + ['id' => $this->nextId++, 'manage_stock' => true, 'stock_quantity' => 7];
+        $product = array_merge(
+            ['manage_stock' => false, 'stock_quantity' => null],
+            $payload,
+            ['id' => $this->nextId++],
+        );
+
         $this->createdProducts[] = $product;
+        $this->productsById[$product['id']] = $product;
 
         if (isset($payload['sku'])) {
             $this->productsBySku[$payload['sku']] = $product;
@@ -75,12 +113,23 @@ class FakeWooClient implements WooCommerceClient
     public function updateProduct(int $wooId, array $payload): array
     {
         $this->calls[] = 'updateProduct:'.$wooId;
+        $this->updatePayloads[$wooId] = $payload;
 
         if ($this->onUpdateProduct !== null) {
             return ($this->onUpdateProduct)($wooId, $payload);
         }
 
-        return $payload + ['id' => $wooId, 'manage_stock' => true, 'stock_quantity' => 12];
+        $existing = $this->productsById[$wooId]
+            ?? ['id' => $wooId, 'manage_stock' => false, 'stock_quantity' => null];
+
+        $updated = array_merge($existing, $payload, ['id' => $wooId]);
+        $this->productsById[$wooId] = $updated;
+
+        if (isset($updated['sku'])) {
+            $this->productsBySku[$updated['sku']] = $updated;
+        }
+
+        return $updated;
     }
 
     public function listCategories(array $query = []): array

@@ -40,6 +40,14 @@ interface WooCommerceClient
     public function findProductBySku(string $sku): ?array;
 
     /**
+     * The store product with this id. Throws a `ResourceGone` (a
+     * {@see WooSyncException} subclass) if it no longer exists on the store.
+     *
+     * @return array<string, mixed>
+     */
+    public function getProduct(int $wooId): array;
+
+    /**
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */

@@ -45,6 +45,13 @@ class BasicAuthWooClient implements WooCommerceClient
         return $matches[0] ?? null;
     }
 
+    public function getProduct(int $wooId): array
+    {
+        // A 404 here becomes ResourceGone in guard(); the runner treats that as
+        // "never synced" and recreates the product.
+        return $this->request('get', "products/{$wooId}")->json() ?? [];
+    }
+
     public function createProduct(array $payload): array
     {
         return $this->request('post', 'products', $payload)->json() ?? [];
