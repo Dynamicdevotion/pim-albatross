@@ -1,0 +1,30 @@
+{
+    "name": "nwidart/branding",
+    "description": "",
+    "authors": [
+        {
+            "name": "Nicolas Widart",
+            "email": "n.widart@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [],
+            "aliases": {
+
+            }
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\Branding\\": "app/",
+            "Modules\\Branding\\Database\\Factories\\": "database/factories/",
+            "Modules\\Branding\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\Branding\\Tests\\": "tests/"
+        }
+    }
+}

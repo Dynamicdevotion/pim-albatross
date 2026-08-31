@@ -382,4 +382,35 @@ return [
             'unexpected' => 'Unexpected error while exporting.',
         ],
     ],
+
+    // Branding module — panel appearance (single `settings` row).
+    'branding' => [
+        'nav' => [
+            'group' => 'Settings',
+            'label' => 'Branding',
+        ],
+        'page' => [
+            'title' => 'Branding & appearance',
+        ],
+        'section' => [
+            'identity' => 'Panel identity',
+            'identity_hint' => 'Logo, name and colour used in the admin header and theme.',
+        ],
+        'field' => [
+            'logo' => 'Logo',
+            'brand_name' => 'Company / product name',
+            'primary_color' => 'Primary colour',
+        ],
+        'help' => [
+            'logo' => 'Shown in the header instead of the text name. JPG, PNG or WebP, max 5 MB.',
+            'brand_name' => 'Used in the header when no logo has been uploaded.',
+            'primary_color' => 'Applied to theme buttons, links and accents. Empty = default colour (amber).',
+        ],
+        'action' => [
+            'save' => 'Save',
+        ],
+        'notification' => [
+            'saved' => 'Branding settings saved',
+        ],
+    ],
 ];

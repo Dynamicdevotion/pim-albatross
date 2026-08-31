@@ -382,4 +382,35 @@ return [
             'unexpected' => 'Errore imprevisto durante l\'export.',
         ],
     ],
+
+    // Modulo Branding — aspetto del pannello (riga singola `settings`).
+    'branding' => [
+        'nav' => [
+            'group' => 'Impostazioni',
+            'label' => 'Branding',
+        ],
+        'page' => [
+            'title' => 'Branding e aspetto',
+        ],
+        'section' => [
+            'identity' => 'Identità del pannello',
+            'identity_hint' => 'Logo, nome e colore usati nell\'intestazione e nel tema dell\'area di amministrazione.',
+        ],
+        'field' => [
+            'logo' => 'Logo',
+            'brand_name' => 'Nome azienda / prodotto',
+            'primary_color' => 'Colore primario',
+        ],
+        'help' => [
+            'logo' => 'Mostrato nell\'intestazione al posto del testo. JPG, PNG o WebP, max 5 MB.',
+            'brand_name' => 'Usato nell\'intestazione quando non è caricato alcun logo.',
+            'primary_color' => 'Applicato a bottoni, link e accenti del tema. Vuoto = colore predefinito (ambra).',
+        ],
+        'action' => [
+            'save' => 'Salva',
+        ],
+        'notification' => [
+            'saved' => 'Impostazioni di branding salvate',
+        ],
+    ],
 ];

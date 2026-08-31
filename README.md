@@ -742,6 +742,74 @@ snapshot — so an export can never drift from what the list shows.
 
 ---
 
+## Branding module
+
+Per-installation panel branding — one client per install, so a **single-row
+`settings` table**, no per-user / per-role variant.
+
+Structure (`Modules/Branding/`):
+
+```
+app/
+├── Models/Setting.php                    # singleton HasMedia; current() / branding() / primaryPalette()
+└── Filament/
+    ├── BrandingPanelPlugin.php           # wires brandName / brandLogo / colors + discoverPages
+    └── Pages/ManageBranding.php          # the "Branding" settings page
+database/migrations/2026_08_31_130000_create_settings_table.php
+```
+
+### `Setting` (single row)
+
+| Column | Notes |
+|---|---|
+| `brand_name` | nullable — company / product name (e.g. "Albatross") |
+| `primary_color` | nullable — hex `#rrggbb` |
+
+The logo is a Spatie Media Library `singleFile` collection `logo` (jpg / png /
+webp, max 5 MB, `public` disk) — same setup as the product images.
+
+- **`Setting::current()`** — the one row, `firstOrCreate`d on first access. Used
+  by the settings page (the media upload needs a real model to bind to).
+- **`Setting::branding()`** — a `Cache::rememberForever` snapshot
+  `['brand_name', 'primary_color', 'logo_url']`, safe before the table exists.
+  This is what the panel closures read on every request; the cache is flushed
+  by the model's `saved` / `deleted` events and explicitly by the settings page
+  after a logo-only change.
+- **`Setting::primaryPalette()`** — `Color::hex($primary_color)` expanded to
+  shades, or `Color::Amber` (the historical default) when unset or malformed.
+
+### `ManageBranding` page (`/admin/impostazioni`, "Impostazioni" nav group)
+
+A form: `SpatieMediaLibraryFileUpload` (logo) + `TextInput` (name) +
+`ColorPicker` (primary colour). `mount()` fills from `Setting::current()`;
+`save()` calls `$this->form->getState()` (which persists the logo via the
+schema's `saveRelationships()`), updates the two columns and flushes the cache.
+
+`canAccess()` returns `true` for now — **TODO: restringere agli admin quando
+arriva il sistema di permessi** (noted in the class).
+
+### Panel wiring (`BrandingPanelPlugin`)
+
+```php
+$panel
+    ->brandName(fn () => Setting::branding()['brand_name'] ?: config('app.name'))
+    ->brandLogo(fn () => Setting::branding()['logo_url'])
+    ->brandLogoHeight('2rem')
+    ->colors(fn () => ['primary' => Setting::primaryPalette()]);
+```
+
+All closures — re-evaluated per request from the cached snapshot, so a save
+takes effect immediately with **no `filament:optimize-clear` needed**. Filament
+shows the logo `<img>` when `brandLogo` is a URL and falls back to the
+`brandName` text otherwise, so "logo, else text name, never empty" is the
+stock behaviour. `AdminPanelProvider` keeps `->colors(['primary' => Color::Amber])`
+as the base; the plugin appends the dynamic `primary` (itself Amber-defaulting).
+
+---
+
+
+---
+
 ## Interface localization
 
 The **panel UI** (labels, buttons, notifications) is translatable, separately
