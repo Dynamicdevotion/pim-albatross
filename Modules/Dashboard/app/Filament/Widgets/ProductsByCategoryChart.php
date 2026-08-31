@@ -10,7 +10,11 @@ use Modules\Taxonomies\Models\Taxonomy;
 use Modules\Taxonomies\Models\TaxonomyTerm;
 
 /**
- * Product distribution across the terms of the "Categoria" taxonomy.
+ * Product distribution across the terms of the category taxonomy.
+ *
+ * The taxonomy is `config('dashboard.category_taxonomy_slug')` when set,
+ * otherwise the first one whose slug starts with `categor` (the panel creates
+ * it as "Categorie" → slug `categorie`; seeded data used `categoria`).
  *
  * Each bar's value is counted through {@see ProductListQuery} with the same
  * `taxonomy_terms` clause the bar links to (subtree expansion included), so
@@ -36,10 +40,7 @@ class ProductsByCategoryChart extends ChartWidget
 
     protected function getData(): array
     {
-        $taxonomy = Taxonomy::query()
-            ->where('slug', 'categoria')
-            ->with(['terms.translations'])
-            ->first();
+        $taxonomy = $this->categoryTaxonomy();
 
         if ($taxonomy === null) {
             return ['datasets' => [['label' => __('pim.dashboard.chart.category.dataset'), 'data' => []]], 'labels' => []];
@@ -64,6 +65,19 @@ class ProductsByCategoryChart extends ChartWidget
             ]],
             'labels' => $rows->pluck('label')->all(),
         ];
+    }
+
+    private function categoryTaxonomy(): ?Taxonomy
+    {
+        $query = Taxonomy::query()->with(['terms.translations']);
+
+        $slug = config('dashboard.category_taxonomy_slug');
+
+        if (filled($slug)) {
+            return $query->where('slug', $slug)->first();
+        }
+
+        return $query->where('slug', 'like', 'categor%')->orderBy('id')->first();
     }
 
     protected function getOptions(): RawJs

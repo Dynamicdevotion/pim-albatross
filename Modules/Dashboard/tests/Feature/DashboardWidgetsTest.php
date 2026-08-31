@@ -127,8 +127,10 @@ class DashboardWidgetsTest extends TestCase
 
     public function test_category_chart_counts_products_per_term_and_carries_a_link(): void
     {
-        $taxonomy = Taxonomy::create(['slug' => 'categoria']);
-        $taxonomy->translations()->create(['locale' => 'it', 'name' => 'Categoria']);
+        // Real production slug is the plural "categorie" — the widget's
+        // `like 'categor%'` auto-detection must still find it.
+        $taxonomy = Taxonomy::create(['slug' => 'categorie']);
+        $taxonomy->translations()->create(['locale' => 'it', 'name' => 'Categorie']);
 
         $abbigliamento = $taxonomy->terms()->create(['slug' => 'abbigliamento']);
         $abbigliamento->translations()->create(['locale' => 'it', 'name' => 'Abbigliamento']);
@@ -149,8 +151,32 @@ class DashboardWidgetsTest extends TestCase
         );
     }
 
-    public function test_category_chart_is_empty_without_the_categoria_taxonomy(): void
+    public function test_category_chart_respects_the_configured_taxonomy_slug(): void
     {
+        $categorie = Taxonomy::create(['slug' => 'categorie']);
+        $categorie->translations()->create(['locale' => 'it', 'name' => 'Categorie']);
+        $categorie->terms()->create(['slug' => 'ignored'])
+            ->translations()->create(['locale' => 'it', 'name' => 'Ignored']);
+
+        $macro = Taxonomy::create(['slug' => 'macro-categoria']);
+        $macro->translations()->create(['locale' => 'it', 'name' => 'Macro categoria']);
+        $chosen = $macro->terms()->create(['slug' => 'chosen']);
+        $chosen->translations()->create(['locale' => 'it', 'name' => 'Chosen']);
+        $this->product('P1')->taxonomyTerms()->attach($chosen->id);
+
+        config()->set('dashboard.category_taxonomy_slug', 'macro-categoria');
+
+        $data = $this->invoke(new ProductsByCategoryChart, 'getData');
+
+        $this->assertSame(['Chosen'], $data['labels']);
+        $this->assertSame([1], $data['datasets'][0]['data']);
+    }
+
+    public function test_category_chart_is_empty_without_a_category_taxonomy(): void
+    {
+        Taxonomy::create(['slug' => 'colore'])
+            ->translations()->create(['locale' => 'it', 'name' => 'Colore']);
+
         $data = $this->invoke(new ProductsByCategoryChart, 'getData');
 
         $this->assertSame([], $data['labels']);

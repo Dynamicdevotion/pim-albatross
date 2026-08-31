@@ -854,12 +854,15 @@ products filter drawer, labelled *"Una qualsiasi lingua attiva"*.
 
 ### `ProductsByCategoryChart`
 
-Bar chart of product count per term of the `categoria` taxonomy. Each bar's
-value is `ProductListQuery::for(['taxonomy_terms' => ['terms' => [$term->id]]])
-->count()` — the same clause (subtree expansion included) the bar links to, so
-clicking a bar opens the list showing exactly that many rows. The click is a
-Chart.js `onClick` in `getOptions()` (`RawJs`) reading a `urls` array carried on
-the dataset. Empty (no bars) when there is no `categoria` taxonomy.
+Bar chart of product count per term of the category taxonomy —
+`config('dashboard.category_taxonomy_slug')` when set, otherwise the first
+taxonomy whose slug starts with `categor` (the panel creates it as "Categorie"
+→ slug `categorie`; seeded data used `categoria`). Each bar's value is
+`ProductListQuery::for(['taxonomy_terms' => ['terms' => [$term->id]]])->count()`
+— the same clause (subtree expansion included) the bar links to, so clicking a
+bar opens the list showing exactly that many rows. The click is a Chart.js
+`onClick` in `getOptions()` (`RawJs`) reading a `urls` array carried on the
+dataset. Empty (no bars) when there is no such taxonomy.
 
 ### `ProductsMissingImage`
 
