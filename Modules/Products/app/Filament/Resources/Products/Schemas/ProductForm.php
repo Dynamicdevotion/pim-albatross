@@ -5,6 +5,7 @@ namespace Modules\Products\Filament\Resources\Products\Schemas;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
@@ -15,6 +16,7 @@ use Modules\Localization\Models\Language;
 use Modules\Localization\Support\Locales;
 use Modules\Products\Enums\ProductType;
 use Modules\Products\Models\Product;
+use Modules\Products\Support\ExistingImagePicker;
 use Modules\Taxonomies\Models\TaxonomyTerm;
 
 class ProductForm
@@ -23,6 +25,8 @@ class ProductForm
     {
         return $schema
             ->components([
+                // --- main structure: sku / name / description / price / stock /
+                //     taxonomies stay here, outside the grouped sections below ---
                 Select::make('type')
                     ->label(__('pim.field.type'))
                     ->options(collect(ProductType::cases())
@@ -66,7 +70,9 @@ class ProductForm
                     ->minValue(0)
                     ->default(0)
                     ->visible(fn (Get $get): bool => $get('type') !== ProductType::Variable->value),
-                Section::make(__('pim.section.dimensions'))
+
+                // --- Shipping ---
+                Section::make(__('pim.section.shipping'))
                     ->visible(fn (Get $get): bool => $get('type') !== ProductType::Variable->value)
                     ->columns(2)
                     ->columnSpanFull()
@@ -92,6 +98,8 @@ class ProductForm
                             ->minValue(0)
                             ->suffix('cm'),
                     ]),
+
+                // --- Images ---
                 Section::make(__('pim.section.media'))
                     ->columnSpanFull()
                     ->schema([
@@ -106,7 +114,8 @@ class ProductForm
                             ->imagePreviewHeight('130')
                             ->extraAttributes(['style' => 'max-width: 30rem'], merge: true)
                             ->acceptedFileTypes(Product::IMAGE_MIME_TYPES)
-                            ->maxSize(5120),
+                            ->maxSize(5120)
+                            ->hintAction(ExistingImagePicker::hintAction('main_image', multiple: false)),
                         SpatieMediaLibraryFileUpload::make('gallery')
                             ->label(__('pim.field.gallery'))
                             ->collection('gallery')
@@ -121,8 +130,14 @@ class ProductForm
                             ->extraAttributes(['style' => 'max-width: 30rem'], merge: true)
                             ->acceptedFileTypes(Product::IMAGE_MIME_TYPES)
                             ->maxSize(5120)
+                            ->hintAction(ExistingImagePicker::hintAction('gallery', multiple: true))
                             ->columnSpanFull(),
                     ]),
+
+                // --- Custom ---
+                // TODO: sezione "Custom" (attributi personalizzati) — da
+                // implementare qui quando il modello lo supporterà.
+
                 Select::make('taxonomyTerms')
                     ->label(__('pim.field.taxonomy_terms'))
                     ->relationship(
@@ -133,8 +148,7 @@ class ProductForm
                     ->multiple()
                     ->preload()
                     ->searchable()
-                    ->getOptionLabelFromRecordUsing(fn (TaxonomyTerm $record): string =>
-                        "{$record->taxonomy->name}: {$record->name}")
+                    ->getOptionLabelFromRecordUsing(fn (TaxonomyTerm $record): string => "{$record->taxonomy->name}: {$record->name}")
                     ->columnSpanFull(),
                 ProductPricesTable::make()
                     ->visible(fn (Get $get): bool => $get('type') !== ProductType::Variable->value)
@@ -151,6 +165,20 @@ class ProductForm
                                 ->required($language->is_base),
                             RichEditor::make("translations.{$language->code}.description")
                                 ->label(__('pim.field.description')),
+                            // --- SEO (translated, one set per language) ---
+                            Section::make(__('pim.section.seo'))
+                                ->columnSpanFull()
+                                ->schema([
+                                    TextInput::make("translations.{$language->code}.meta_title")
+                                        ->label(__('pim.field.meta_title'))
+                                        ->maxLength(255)
+                                        ->helperText(__('pim.helper.meta_title')),
+                                    Textarea::make("translations.{$language->code}.meta_description")
+                                        ->label(__('pim.field.meta_description'))
+                                        ->rows(2)
+                                        ->maxLength(255)
+                                        ->helperText(__('pim.helper.meta_description')),
+                                ]),
                         ]))
                         ->all()),
             ]);

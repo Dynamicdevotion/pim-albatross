@@ -29,6 +29,9 @@ return [
         'status' => 'Stato',
         'type' => 'Tipo',
         'stock' => 'Giacenza',
+        'meta_title' => 'Meta title',
+        'meta_description' => 'Meta description',
+        'pick_existing' => 'Immagine esistente',
         'variants' => 'Varianti',
         'variant' => 'Variante',
         'participating_taxonomies' => 'Tassonomie coinvolte',
@@ -117,13 +120,16 @@ return [
         'add_price' => 'Aggiungi un prezzo',
         'generate_variants' => 'Genera varianti',
         'add_variant' => 'Aggiungi una variante',
+        'pick_existing_image' => 'Scegli da un\'immagine esistente',
+        'pick_existing_confirm' => 'Usa questa immagine',
     ],
 
     'section' => [
         'populate_prices' => 'Popola i prezzi da un altro listino',
         'populate_prices_hint' => 'Opzionale. Copia tutti i prezzi dal listino scelto nel nuovo, applicando una variazione percentuale.',
-        'dimensions' => 'Dimensioni e peso',
+        'shipping' => 'Spedizione',
         'media' => 'Immagini',
+        'seo' => 'SEO',
     ],
 
     'helper' => [
@@ -136,6 +142,9 @@ return [
         'generate_variants' => 'Scegli quali tassonomie definiscono le varianti e quali valori combinare. Viene creata una variante per ogni combinazione.',
         'variable_no_price' => 'Un prodotto variabile raggruppa le sue varianti; prezzo e giacenza sono su ciascuna variante.',
         'variant_main_image' => 'Se vuota, la variante mostra l\'immagine principale del prodotto padre.',
+        'meta_title' => 'Titolo per i motori di ricerca (~60 caratteri). Vuoto = nessun meta.',
+        'meta_description' => 'Riassunto per i motori di ricerca (~155 caratteri).',
+        'pick_existing' => 'Il file scelto viene duplicato: ogni prodotto mantiene la propria copia.',
     ],
 
     'modal' => [
@@ -149,6 +158,8 @@ return [
     ],
 
     'notification' => [
+        'pick_existing_done' => 'Immagine copiata sul prodotto',
+        'pick_existing_needs_save' => 'Salva prima il prodotto per poter scegliere un\'immagine esistente',
         'language_activated' => ':name attivata',
         'language_deactivated' => ':name disattivata',
         'content_deleted' => ':count traduzioni rimosse.',

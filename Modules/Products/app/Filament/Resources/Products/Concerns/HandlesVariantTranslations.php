@@ -14,7 +14,7 @@ use Modules\Products\Models\Product;
  */
 trait HandlesVariantTranslations
 {
-    /** @var array<string, array{name?: string|null, description?: string|null}> */
+    /** @var array<string, array{name?: string|null, description?: string|null, meta_title?: string|null, meta_description?: string|null}> */
     protected array $variantTranslationData = [];
 
     /**
@@ -30,7 +30,7 @@ trait HandlesVariantTranslations
     }
 
     /**
-     * @return array<string, array{name: string|null, description: string|null}>
+     * @return array<string, array{name: string|null, description: string|null, meta_title: string|null, meta_description: string|null}>
      */
     protected function readVariantTranslations(Product $record): array
     {
@@ -43,6 +43,8 @@ trait HandlesVariantTranslations
                 $out[$code] = [
                     'name' => $translation->name,
                     'description' => $translation->description,
+                    'meta_title' => $translation->meta_title,
+                    'meta_description' => $translation->meta_description,
                 ];
             }
         }
@@ -67,9 +69,18 @@ trait HandlesVariantTranslations
                 [
                     'name' => $name,
                     'description' => $this->normalizeVariantRichText($row['description'] ?? null),
+                    'meta_title' => $this->nullableVariantTrim($row['meta_title'] ?? null),
+                    'meta_description' => $this->nullableVariantTrim($row['meta_description'] ?? null),
                 ],
             );
         });
+    }
+
+    protected function nullableVariantTrim(?string $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 
     protected function normalizeVariantRichText(?string $html): ?string
