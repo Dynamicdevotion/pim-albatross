@@ -21,6 +21,8 @@ class ProductResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
+    protected static ?int $navigationSort = 10;
+
     protected static ?string $recordTitleAttribute = 'sku';
 
     public static function getModelLabel(): string

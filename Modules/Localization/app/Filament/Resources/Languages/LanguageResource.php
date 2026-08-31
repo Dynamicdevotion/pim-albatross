@@ -20,6 +20,8 @@ class LanguageResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedLanguage;
 
+    protected static ?int $navigationSort = 30;
+
     protected static ?string $recordTitleAttribute = 'name';
 
     public static function getModelLabel(): string
