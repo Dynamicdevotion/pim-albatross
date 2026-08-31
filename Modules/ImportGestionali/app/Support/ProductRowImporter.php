@@ -10,9 +10,13 @@ use Modules\Products\Enums\ProductType;
 use Modules\Products\Models\Product;
 
 /**
- * Turns one mapped row (field => raw value) into a created/updated/skipped
+ * Turns one mapped row (target => raw value) into a created/updated/skipped
  * outcome for a simple product. Matching is by SKU. On update, an empty or
  * unmapped value leaves the existing value untouched.
+ *
+ * Columns mapped to a taxonomy (`taxonomy:{id}`, see {@see MappingTarget}) hold
+ * one or more term names separated by `|`; they are resolved against that
+ * taxonomy and linked through `product_taxonomy_term`.
  *
  * `dryRun` runs every check and reports the outcome without writing — the
  * preview and the real import share this exact code path.
@@ -35,18 +39,22 @@ final class ProductRowImporter
     public function __construct(
         private readonly int $defaultPriceListId,
         private readonly int $baseLanguageId,
+        private readonly TaxonomyTermResolver $taxonomyResolver,
+        private readonly bool $replaceTaxonomyTerms = false,
     ) {}
 
-    public static function make(): self
+    public static function make(bool $createMissingTerms = false, bool $replaceTaxonomyTerms = false): self
     {
         return new self(
             (int) (PriceList::default()?->id ?? 0),
             (int) Locales::base()->id,
+            new TaxonomyTermResolver($createMissingTerms),
+            $replaceTaxonomyTerms,
         );
     }
 
     /**
-     * @param  array<string, string>  $mapped  field => raw value
+     * @param  array<string, string>  $mapped  target => raw value
      * @param  array<string, int>  $seenSkus  lower-cased sku => the line it first appeared on
      */
     public function import(array $mapped, int $line, bool $updateExisting, array &$seenSkus, bool $dryRun = false): RowOutcome
@@ -93,8 +101,22 @@ final class ProductRowImporter
             return RowOutcome::skipped($line, __('pim.import.issue.name_missing', ['line' => $line]));
         }
 
+        $taxonomyTargets = $this->taxonomyTargets($mapped);
+
         if ($dryRun) {
-            return $existing !== null ? RowOutcome::updated($line) : RowOutcome::created($line);
+            $outcome = $existing !== null ? RowOutcome::updated($line) : RowOutcome::created($line);
+
+            if ($taxonomyTargets === []) {
+                return $outcome;
+            }
+
+            $resolutions = [];
+
+            foreach ($taxonomyTargets as $taxonomyId => $names) {
+                $resolutions[] = $this->taxonomyResolver->resolve($taxonomyId, $names, dryRun: true);
+            }
+
+            return $outcome->withTaxonomies($resolutions);
         }
 
         $product = DB::transaction(function () use ($existing, $sku, $stock, $weight, $length, $width, $height, $status, $name, $description, $price): Product {
@@ -146,15 +168,95 @@ final class ProductRowImporter
             return $product;
         });
 
+        $warnings = [];
+
+        // Taxonomy links: outside the product transaction, best-effort like the
+        // images — a term not found is a report note, never a skip.
+        $this->syncTaxonomies($product, $taxonomyTargets, $line, $warnings);
+
         // Images are fetched over HTTP, outside the row transaction, and never
         // skip the product: a failed download is a report note.
-        $warnings = [];
         $this->syncMainImage($product, trim($mapped['image_url'] ?? ''), $line, $warnings);
         $this->syncGallery($product, trim($mapped['gallery_urls'] ?? ''), $line, $warnings);
 
         return $existing !== null
             ? RowOutcome::updated($line, $warnings)
             : RowOutcome::created($line, $warnings);
+    }
+
+    /**
+     * Taxonomy targets present in the row, as taxonomyId => list<termName>.
+     * Empty cells are dropped (an unmapped / blank taxonomy leaves the product
+     * untouched).
+     *
+     * @param  array<string, string>  $mapped
+     * @return array<int, list<string>>
+     */
+    private function taxonomyTargets(array $mapped): array
+    {
+        $targets = [];
+
+        foreach ($mapped as $target => $raw) {
+            if (! MappingTarget::isTaxonomy($target)) {
+                continue;
+            }
+
+            $names = array_values(array_filter(
+                array_map('trim', explode('|', (string) $raw)),
+                fn (string $name): bool => $name !== '',
+            ));
+
+            if ($names !== []) {
+                $targets[MappingTarget::taxonomyId($target)] = $names;
+            }
+        }
+
+        return $targets;
+    }
+
+    /**
+     * @param  array<int, list<string>>  $taxonomyTargets
+     * @param  list<string>  $warnings
+     */
+    private function syncTaxonomies(Product $product, array $taxonomyTargets, int $line, array &$warnings): void
+    {
+        foreach ($taxonomyTargets as $taxonomyId => $names) {
+            $resolution = $this->taxonomyResolver->resolve($taxonomyId, $names, dryRun: false);
+
+            if ($resolution->gone) {
+                $warnings[] = __('pim.import.issue.taxonomy_gone', ['line' => $line]);
+
+                continue;
+            }
+
+            $ids = $resolution->resolvedIds();
+
+            if ($this->replaceTaxonomyTerms && $ids !== []) {
+                $stale = $product->taxonomyTerms()
+                    ->where('taxonomy_terms.taxonomy_id', $taxonomyId)
+                    ->get()
+                    ->pluck('id')
+                    ->reject(fn (int $id): bool => in_array($id, $ids, true))
+                    ->values()
+                    ->all();
+
+                if ($stale !== []) {
+                    $product->taxonomyTerms()->detach($stale);
+                }
+            }
+
+            if ($ids !== []) {
+                $product->taxonomyTerms()->syncWithoutDetaching($ids);
+            }
+
+            foreach ($resolution->missingNames() as $missing) {
+                $warnings[] = __('pim.import.issue.term_not_found', [
+                    'line' => $line,
+                    'term' => $missing,
+                    'taxonomy' => $resolution->taxonomyName,
+                ]);
+            }
+        }
     }
 
     /**
