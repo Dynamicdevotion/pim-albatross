@@ -33,6 +33,9 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            // Redundant with the products-list filter drawer; the panel has no
+            // other resource worth a global search box.
+            ->globalSearch(false)
             // Base fallback; BrandingPanelPlugin appends a dynamic `primary`
             // from the settings row (also falling back to Amber when unset).
             ->colors([
