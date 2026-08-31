@@ -407,6 +407,9 @@ return [
             'brand_name' => 'Used in the header when no logo has been uploaded.',
             'primary_color' => 'Applied to theme buttons, links and accents. Empty = default colour (amber).',
         ],
+        'palette' => [
+            'default' => 'Default (amber)',
+        ],
         'action' => [
             'save' => 'Save',
         ],

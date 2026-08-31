@@ -4,6 +4,9 @@ namespace Modules\ExportProdotti\Filament\Resources\ExportRecords;
 
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
@@ -91,8 +94,13 @@ class ExportRecordResource extends Resource
             ->recordActions([
                 ViewAction::make(),
                 self::downloadAction(),
+                DeleteAction::make(),
             ])
-            ->toolbarActions([]);
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
+            ]);
     }
 
     public static function infolist(Schema $schema): Schema

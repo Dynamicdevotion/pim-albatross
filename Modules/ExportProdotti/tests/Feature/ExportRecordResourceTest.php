@@ -59,4 +59,26 @@ class ExportRecordResourceTest extends TestCase
             ->assertOk()
             ->assertActionHidden('download');
     }
+
+    public function test_deleting_a_record_removes_its_generated_file(): void
+    {
+        Storage::disk('local')->put('exports/gone.csv', "SKU\nA\n");
+
+        $record = ExportRecord::factory()->completed()->create([
+            'format' => 'csv',
+            'stored_path' => 'exports/gone.csv',
+        ]);
+
+        $record->delete();
+
+        Storage::disk('local')->assertMissing('exports/gone.csv');
+    }
+
+    public function test_the_list_exposes_a_delete_action(): void
+    {
+        $record = ExportRecord::factory()->completed()->create();
+
+        Livewire::test(ListExportRecords::class)
+            ->assertTableActionVisible('delete', $record);
+    }
 }

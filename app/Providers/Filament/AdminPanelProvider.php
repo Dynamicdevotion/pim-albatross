@@ -33,6 +33,9 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            // Redundant with the products-list filter drawer; the panel has no
+            // other resource worth a global search box.
+            ->globalSearch(false)
             // Base fallback; BrandingPanelPlugin appends a dynamic `primary`
             // from the settings row (also falling back to Amber when unset).
             ->colors([
@@ -46,6 +49,15 @@ class AdminPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Admin/Widgets'), for: 'App\Filament\Admin\Widgets')
             // Stock widgets replaced by the Dashboard module (see DashboardPanelPlugin).
             ->widgets([])
+            // Menu order: Dashboard, then the ungrouped resources by their
+            // navigationSort (Products 10, Taxonomies 20, Languages 30), then
+            // these groups.
+            ->navigationGroups([
+                __('pim.nav.pricing'),
+                __('pim.import.nav.group'),
+                __('pim.export.nav.group'),
+                __('pim.branding.nav.group'),
+            ])
             ->plugins([
                 LocalizationPanelPlugin::make(),
                 ProductsPanelPlugin::make(),

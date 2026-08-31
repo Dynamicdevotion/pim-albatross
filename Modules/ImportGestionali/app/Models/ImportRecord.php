@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 use Modules\ImportGestionali\Database\Factories\ImportRecordFactory;
 
 /**
@@ -49,6 +50,17 @@ class ImportRecord extends Model
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        // Deleting a run (row action, bulk action or the prune command) also
+        // removes its stored source file.
+        static::deleting(function (ImportRecord $record): void {
+            if (filled($record->stored_path)) {
+                Storage::disk(config('importgestionali.disk'))->delete($record->stored_path);
+            }
+        });
     }
 
     public function user(): BelongsTo

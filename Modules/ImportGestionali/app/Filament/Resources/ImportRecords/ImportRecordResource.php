@@ -3,6 +3,9 @@
 namespace Modules\ImportGestionali\Filament\Resources\ImportRecords;
 
 use BackedEnum;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -81,8 +84,13 @@ class ImportRecordResource extends Resource
             ])
             ->recordActions([
                 ViewAction::make(),
+                DeleteAction::make(),
             ])
-            ->toolbarActions([]);
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
+            ]);
     }
 
     public static function infolist(Schema $schema): Schema

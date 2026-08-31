@@ -598,10 +598,12 @@ that would not download.
 
 ### Report
 
-`ImportRecordResource` ("Esiti import", read-only — no create/edit): a list of
-past runs, and a **View** page with the created / updated / skipped counts, the
-run timing, and the plain-language list of problem rows
-(`import_records.issues`, capped at `issues_cap` = 500, then "…and N more").
+`ImportRecordResource` ("Esiti import", no create/edit): a list of past runs
+with a row + bulk **Delete** action for manual cleanup (deleting a row also
+removes its stored source file, via an `ImportRecord` `deleting` hook), and a
+**View** page with the created / updated / skipped counts, the run timing, and
+the plain-language list of problem rows (`import_records.issues`, capped at
+`issues_cap` = 500, then "…and N more").
 
 ### `import_records` table
 
@@ -712,7 +714,9 @@ Same Netsons caveat as the importer: the queue only drains through the cron
 `* * * * * cd ~/apps/pim && php artisan schedule:run` — without it a large
 export stays `pending`, while everything up to 1000 products still works inline.
 `exportprodotti:prune-files` (scheduled `dailyAt('03:20')`) deletes generated
-files older than `prune_days` (7); the `ExportRecord` rows are kept.
+files older than `prune_days` (7); the `ExportRecord` rows are kept. The
+ExportRecords list also has a row + bulk **Delete** action for manual cleanup,
+which removes the generated file too (an `ExportRecord` `deleting` hook).
 
 ### `ProductListQuery` (Products module)
 
@@ -763,7 +767,7 @@ database/migrations/2026_08_31_130000_create_settings_table.php
 | Column | Notes |
 |---|---|
 | `brand_name` | nullable — company / product name (e.g. "Albatross") |
-| `primary_color` | nullable — hex `#rrggbb` |
+| `primary_color` | nullable — a named Filament palette key (`amber`, `blue`, …), not a hex |
 
 The logo is a Spatie Media Library `singleFile` collection `logo` (jpg / png /
 webp, max 5 MB, `public` disk) — same setup as the product images.
@@ -775,13 +779,17 @@ webp, max 5 MB, `public` disk) — same setup as the product images.
   This is what the panel closures read on every request; the cache is flushed
   by the model's `saved` / `deleted` events and explicitly by the settings page
   after a logo-only change.
-- **`Setting::primaryPalette()`** — `Color::hex($primary_color)` expanded to
-  shades, or `Color::Amber` (the historical default) when unset or malformed.
+- **`Setting::primaryPalette()`** — `Color::all()[$primary_color]` (a named
+  Filament palette expanded to shades), or `Color::Amber` (the historical
+  default) when unset or unknown. `Setting::primaryPaletteOptions()` builds the
+  `value => HTML swatch label` list for the picker (`Setting::PRIMARY_PALETTES`,
+  ~10 curated names).
 
 ### `ManageBranding` page (`/admin/impostazioni`, "Impostazioni" nav group)
 
-A form: `SpatieMediaLibraryFileUpload` (logo) + `TextInput` (name) +
-`ColorPicker` (primary colour). `mount()` fills from `Setting::current()`;
+A form: `SpatieMediaLibraryFileUpload` (logo) + `TextInput` (name) + a
+`Select` (`->native(false)->allowHtml()`) of ~10 named Filament palettes shown
+as colour swatches. `mount()` fills from `Setting::current()`;
 `save()` calls `$this->form->getState()` (which persists the logo via the
 schema's `saveRelationships()`), updates the two columns and flushes the cache.
 
@@ -792,7 +800,7 @@ arriva il sistema di permessi** (noted in the class).
 
 ```php
 $panel
-    ->brandName(fn () => Setting::branding()['brand_name'] ?: config('app.name'))
+    ->brandName(fn () => Setting::branding()['brand_name'] ?: (config('app.name') ?: 'Albatross'))
     ->brandLogo(fn () => Setting::branding()['logo_url'])
     ->brandLogoHeight('2rem')
     ->colors(fn () => ['primary' => Setting::primaryPalette()]);
@@ -802,7 +810,9 @@ All closures — re-evaluated per request from the cached snapshot, so a save
 takes effect immediately with **no `filament:optimize-clear` needed**. Filament
 shows the logo `<img>` when `brandLogo` is a URL and falls back to the
 `brandName` text otherwise, so "logo, else text name, never empty" is the
-stock behaviour. `AdminPanelProvider` keeps `->colors(['primary' => Color::Amber])`
+stock behaviour. The brand name falls through brand setting → `APP_NAME` →
+the literal `Albatross` (this is the single Albatross install; `APP_NAME` is
+also set to `Albatross` in the server `.env`). `AdminPanelProvider` keeps `->colors(['primary' => Color::Amber])`
 as the base; the plugin appends the dynamic `primary` (itself Amber-defaulting).
 
 ---
@@ -854,12 +864,15 @@ products filter drawer, labelled *"Una qualsiasi lingua attiva"*.
 
 ### `ProductsByCategoryChart`
 
-Bar chart of product count per term of the `categoria` taxonomy. Each bar's
-value is `ProductListQuery::for(['taxonomy_terms' => ['terms' => [$term->id]]])
-->count()` — the same clause (subtree expansion included) the bar links to, so
-clicking a bar opens the list showing exactly that many rows. The click is a
-Chart.js `onClick` in `getOptions()` (`RawJs`) reading a `urls` array carried on
-the dataset. Empty (no bars) when there is no `categoria` taxonomy.
+Bar chart of product count per term of the category taxonomy —
+`config('dashboard.category_taxonomy_slug')` when set, otherwise the first
+taxonomy whose slug starts with `categor` (the panel creates it as "Categorie"
+→ slug `categorie`; seeded data used `categoria`). Each bar's value is
+`ProductListQuery::for(['taxonomy_terms' => ['terms' => [$term->id]]])->count()`
+— the same clause (subtree expansion included) the bar links to, so clicking a
+bar opens the list showing exactly that many rows. The click is a Chart.js
+`onClick` in `getOptions()` (`RawJs`) reading a `urls` array carried on the
+dataset. Empty (no bars) when there is no such taxonomy.
 
 ### `ProductsMissingImage`
 
