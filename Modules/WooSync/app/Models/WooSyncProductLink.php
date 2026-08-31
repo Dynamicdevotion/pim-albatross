@@ -14,6 +14,12 @@ use Modules\Products\Models\Product;
  *
  * `images_hash` fingerprints the image set last pushed, so a later update can
  * skip re-sending unchanged images.
+ *
+ * `last_known_stock` is the reconciled stock value last written to both the
+ * store and `product.stock`; it is the baseline the runner's delta model
+ * measures the next PIM-side change against. Null means no stock sync has
+ * happened yet (or the store has stock management turned off), so the next one
+ * is treated as a first sync.
  */
 class WooSyncProductLink extends Model
 {
@@ -25,12 +31,14 @@ class WooSyncProductLink extends Model
         'images_hash',
         'last_synced_at',
         'last_status',
+        'last_known_stock',
     ];
 
     protected function casts(): array
     {
         return [
             'woocommerce_id' => 'integer',
+            'last_known_stock' => 'integer',
             'last_synced_at' => 'datetime',
         ];
     }

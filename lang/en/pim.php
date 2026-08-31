@@ -575,6 +575,17 @@ return [
             'no_price' => 'No price on the default price list: sent without a price.',
             'no_name' => 'Missing name in the base language (:locale): used the SKU.',
         ],
+        // Stock reconciliation notes (delta model, last_known_stock on
+        // woosync_product_links): they land in the per-product "Detail" column
+        // of the run report.
+        'stock' => [
+            'first_sync' => 'First sync: PIM stock sent to WooCommerce.',
+            'recreated' => 'Product missing on WooCommerce: recreated, PIM stock re-sent.',
+            'first_sync_overwrite' => 'First sync: PIM stock sent; WooCommerce value (:woo) overwritten.',
+            'woo_unmanaged' => 'Stock management is off on WooCommerce: stock not synced.',
+            'delta_applied' => 'Stock reconciled: PIM change :delta on the WooCommerce value :woo → :new.',
+            'clamped' => 'The change would have taken stock below zero: set to 0.',
+        ],
         'error' => [
             'not_configured' => 'WooCommerce connection is not configured.',
             'unreachable' => 'Store unreachable.',

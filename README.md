@@ -1011,18 +1011,32 @@ report.
 
 - **simple only** — `variable` / `variant` → `skipped` with a reason; no SKU →
   `skipped`.
-- **create vs update** — linked (`woocommerce_id`) → `PUT`; a `404` there drops
-  the stale id and recreates. Not linked → `GET /products?sku=` to adopt an
-  existing store product, else `POST`.
-- **fields (v1, fixed)** — `sku`, `name` + `description` (base language),
-  `regular_price` (default `PriceList`; missing → still pushed, noted in the
-  report), `weight` + `dimensions`, `images` (main then gallery, by public URL),
-  `categories` (see below). **No stock fields are ever sent** (`manage_stock`,
-  `stock_quantity`, `stock_status`): inventory is one-directional, Woo → PIM.
-- **stock write-back** — the store's `stock_quantity` overwrites `product.stock`
-  (`saveQuietly`) whenever the store's response says it manages stock for that
-  product (`manage_stock: true`); until a shop manager turns that on in Woo, a
-  WooSync-created product carries no stock and the write-back is a no-op.
+- **create vs update** — linked (`woocommerce_id`) → `GET /products/{id}` then
+  `PUT`; a `404` on the `GET` drops the stale id (and stock baseline) and
+  recreates. Not linked → `GET /products?sku=` to adopt an existing store
+  product, else `POST`.
+- **fields** — `sku`, `name` + `description` (base language), `regular_price`
+  (default `PriceList`; missing → still pushed, noted in the report), `weight` +
+  `dimensions`, `images` (main then gallery, by public URL), `categories` (see
+  below), and the reconciled stock fields below.
+- **stock reconciliation** — never a blind overwrite: both sides move between
+  syncs (PIM for production / corrections, store for sales), so each link keeps
+  a `last_known_stock` baseline.
+  - *first sync* (no baseline): `PUT`/`POST` `manage_stock: true`,
+    `stock_quantity: <PIM stock>`; baseline ← that value. Same when a linked
+    product 404s ("recreated") and when an already-linked store product is
+    stock-synced for the first time (the PIM value wins, overwriting the store —
+    the agreed bootstrap).
+  - *later syncs*: `new = store_quantity + (PIM_stock - last_known_stock)`
+    (the store's quantity already reflects sales; the parenthesised term is the
+    PIM-side change). `new` is written to **both** the store and `product.stock`
+    (`saveQuietly`), and the baseline moves to it. `new < 0` is clamped to `0`.
+  - *store stock management off* (`manage_stock: false` on the store): not
+    forced back on — no stock in the `PUT`, both sides left as they are, the
+    baseline is dropped (so re-enabling it is a clean first sync), and the
+    report row says "gestione stock disattivata su WooCommerce".
+  - the GET→PUT gap is a small race window: a store-side stock edit in between
+    is not seen and gets reconciled away on the next sync.
 - **rate limit** — a `429` anywhere stops the whole run (`status = failed`,
   partial progress kept); a small `request_delay_ms` pause (default 250ms) sits
   between products.
@@ -1043,7 +1057,8 @@ delete.
 ### Tables
 
 `woosync_settings`, `woosync_runs`, `woosync_product_links` (`unique(product_id)`,
-`images_hash`), `woosync_category_links` (`unique(taxonomy_term_id)`). All in
+`images_hash`, `last_known_stock` — the stock-reconciliation baseline),
+`woosync_category_links` (`unique(taxonomy_term_id)`). All in
 `Modules/WooSync/database/migrations/`.
 
 ---

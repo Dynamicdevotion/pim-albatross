@@ -575,6 +575,17 @@ return [
             'no_price' => 'Nessun prezzo sul listino predefinito: inviato senza prezzo.',
             'no_name' => 'Nome mancante nella lingua base (:locale): usato lo SKU.',
         ],
+        // Note sulla riconciliazione della giacenza (modello a delta con
+        // last_known_stock su woosync_product_links): finiscono nel campo
+        // "Dettaglio" dell'esito per prodotto.
+        'stock' => [
+            'first_sync' => 'Prima sincronizzazione: giacenza PIM inviata a WooCommerce.',
+            'recreated' => 'Prodotto assente su WooCommerce: ricreato, giacenza PIM reinviata.',
+            'first_sync_overwrite' => 'Prima sincronizzazione: giacenza PIM inviata; valore su WooCommerce (:woo) sovrascritto.',
+            'woo_unmanaged' => 'Gestione stock disattivata su WooCommerce: giacenza non sincronizzata.',
+            'delta_applied' => 'Giacenza riconciliata: variazione PIM :delta sul valore WooCommerce :woo → :new.',
+            'clamped' => 'La variazione avrebbe portato la giacenza sotto zero: impostata a 0.',
+        ],
         'error' => [
             'not_configured' => 'Connessione WooCommerce non configurata.',
             'unreachable' => 'Negozio irraggiungibile.',
