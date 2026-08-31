@@ -598,10 +598,12 @@ that would not download.
 
 ### Report
 
-`ImportRecordResource` ("Esiti import", read-only — no create/edit): a list of
-past runs, and a **View** page with the created / updated / skipped counts, the
-run timing, and the plain-language list of problem rows
-(`import_records.issues`, capped at `issues_cap` = 500, then "…and N more").
+`ImportRecordResource` ("Esiti import", no create/edit): a list of past runs
+with a row + bulk **Delete** action for manual cleanup (deleting a row also
+removes its stored source file, via an `ImportRecord` `deleting` hook), and a
+**View** page with the created / updated / skipped counts, the run timing, and
+the plain-language list of problem rows (`import_records.issues`, capped at
+`issues_cap` = 500, then "…and N more").
 
 ### `import_records` table
 
@@ -712,7 +714,9 @@ Same Netsons caveat as the importer: the queue only drains through the cron
 `* * * * * cd ~/apps/pim && php artisan schedule:run` — without it a large
 export stays `pending`, while everything up to 1000 products still works inline.
 `exportprodotti:prune-files` (scheduled `dailyAt('03:20')`) deletes generated
-files older than `prune_days` (7); the `ExportRecord` rows are kept.
+files older than `prune_days` (7); the `ExportRecord` rows are kept. The
+ExportRecords list also has a row + bulk **Delete** action for manual cleanup,
+which removes the generated file too (an `ExportRecord` `deleting` hook).
 
 ### `ProductListQuery` (Products module)
 
