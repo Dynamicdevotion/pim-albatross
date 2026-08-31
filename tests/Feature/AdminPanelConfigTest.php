@@ -28,10 +28,14 @@ class AdminPanelConfigTest extends TestCase
         $groups = Filament::getPanel('admin')->getNavigationGroups();
         $labels = array_map(fn ($group): string => is_string($group) ? $group : $group->getLabel(), $groups);
 
+        // The WooSync group sits between Export and Impostazioni; it is present
+        // here because the test suite runs with WOOSYNC_ENABLED=true, and is
+        // simply hidden (empty) on an installation without the add-on.
         $this->assertSame([
             __('pim.nav.pricing'),
             __('pim.import.nav.group'),
             __('pim.export.nav.group'),
+            __('pim.woosync.nav.group'),
             __('pim.branding.nav.group'),
         ], $labels);
     }

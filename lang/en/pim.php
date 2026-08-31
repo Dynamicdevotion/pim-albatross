@@ -473,4 +473,117 @@ return [
             ],
         ],
     ],
+
+    // WooSync module — pushes products to a WooCommerce store. A separately
+    // sold add-on, toggled per installation (Laravel Pennant feature "woosync"
+    // / WOOSYNC_ENABLED).
+    'woosync' => [
+        'nav' => [
+            'group' => 'WooCommerce',
+            'settings' => 'Connection',
+            'runs' => 'Syncs',
+        ],
+        'page' => [
+            'title' => 'WooCommerce connection',
+        ],
+        'section' => [
+            'connection' => 'WooCommerce store',
+            'connection_hint' => 'Store URL and REST API keys (Consumer Key / Secret). The store must use HTTPS.',
+            'last_test' => 'Last test',
+        ],
+        'field' => [
+            'store_url' => 'Store URL',
+            'consumer_key' => 'Consumer Key',
+            'consumer_secret' => 'Consumer Secret',
+        ],
+        'help' => [
+            'store_url' => 'e.g. https://shop.example.com — must start with https://',
+            'consumer_key' => 'WooCommerce → Settings → Advanced → REST API. Read/Write permissions are required.',
+        ],
+        'validation' => [
+            'https' => 'The store URL must use HTTPS.',
+        ],
+        'action' => [
+            'sync' => 'Sync to WooCommerce',
+            'sync_bulk' => 'Sync selected products to WooCommerce',
+            'test' => 'Test connection',
+            'save' => 'Save',
+        ],
+        'confirm' => [
+            'single' => 'Send product ":product" to the WooCommerce store?',
+            'bulk' => 'Send the selected products to the WooCommerce store? Only simple products are synced.',
+        ],
+        'test' => [
+            'ok' => 'Connection succeeded.',
+            'failed' => 'Connection failed.',
+            'never' => 'No test run yet.',
+            'summary' => 'Tested :when — :outcome',
+        ],
+        'notify' => [
+            'queued' => 'Sync queued: it will be processed shortly.',
+            'done' => 'Sync finished: :created created, :updated updated, :skipped skipped, :failed failed.',
+        ],
+        'notification' => [
+            'saved' => 'WooCommerce settings saved.',
+        ],
+        'trigger' => [
+            'single' => 'Single',
+            'bulk' => 'Bulk',
+        ],
+        'status' => [
+            'pending' => 'Pending',
+            'processing' => 'Running',
+            'completed' => 'Completed',
+            'failed' => 'Failed',
+        ],
+        'result' => [
+            'created' => 'Created',
+            'updated' => 'Updated',
+            'skipped' => 'Skipped',
+            'failed' => 'Failed',
+        ],
+        'col' => [
+            'when' => 'Date',
+            'user' => 'User',
+            'trigger' => 'Type',
+            'total' => 'Total',
+            'created' => 'Created',
+            'updated' => 'Updated',
+            'skipped' => 'Skipped',
+            'failed' => 'Failed',
+        ],
+        'run' => [
+            'label' => 'Sync',
+            'plural' => 'Syncs',
+        ],
+        'report' => [
+            'summary' => 'Summary',
+            'started' => 'Started',
+            'finished' => 'Finished',
+            'running_hint' => 'Sync in progress… this page refreshes itself.',
+            'error' => 'Error',
+            'items' => 'Per-product outcome',
+            'item_product' => 'Product',
+            'item_result' => 'Outcome',
+            'item_reason' => 'Detail',
+        ],
+        'skip' => [
+            'not_simple' => 'Skipped: only simple products can be synced in this version.',
+            'no_sku' => 'Skipped: missing SKU.',
+        ],
+        'warn' => [
+            'no_price' => 'No price on the default price list: sent without a price.',
+            'no_name' => 'Missing name in the base language (:locale): used the SKU.',
+        ],
+        'error' => [
+            'not_configured' => 'WooCommerce connection is not configured.',
+            'unreachable' => 'Store unreachable.',
+            'auth' => 'WooCommerce credentials are invalid or expired.',
+            'rate_limited' => 'The store asked us to slow down (too many requests). Try again later.',
+            'rejected' => 'Request rejected by the store.',
+            'gone' => 'Resource not found on the store.',
+            'store_error' => 'Store internal error.',
+            'unexpected' => 'Unexpected error during the sync.',
+        ],
+    ],
 ];

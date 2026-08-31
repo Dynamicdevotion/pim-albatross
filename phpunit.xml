@@ -35,5 +35,9 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!-- WooSync ships disabled by default (sold separately); its tests need
+             the module active. FeatureFlagTest still exercises the off state
+             by toggling config('woosync.enabled') at runtime. -->
+        <env name="WOOSYNC_ENABLED" value="true"/>
     </php>
 </phpunit>

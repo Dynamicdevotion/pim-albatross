@@ -944,6 +944,107 @@ no recent import dropped any rows.
 
 ---
 
+## WooSync module
+
+Pushes products to a single **WooCommerce** store and reads their stock back.
+Sold as a **separate add-on**: it is off unless the installation opts in, and
+when off it contributes nothing to the panel.
+
+### Commercial feature flag (Laravel Pennant)
+
+`config('woosync.enabled')` ← `WOOSYNC_ENABLED` (`.env`, default `false`). The
+gate is `Modules\WooSync\Support\WooSync::enabled()`, read straight from config
+because `WooSyncPanelPlugin::register()` consults it while the panel is being
+built (before the module provider defines the Pennant feature). A matching
+Pennant feature `woosync` is still defined from the same value
+(`WooSync::defineFeature()`), so `Feature::active('woosync')` and `@feature`
+work. Pennant runs on the **`array`** store (`config/pennant.php`) — the flag is
+global, no `features` table.
+
+With the flag **off**: `WooSyncPanelPlugin` discovers no pages/resources, the
+`WooSyncServiceProvider` registers no product actions → no "WooCommerce" nav
+group, no connection page, no report, no sync buttons.
+
+### Module boundaries
+
+Depends (one way) only on Products / Pricing / Taxonomies / Localization. The
+products-list actions are injected through a generic seam in the Products
+module — `Modules\Products\Support\ProductRowActions` (a `record()` / `bulk()`
+registry that `ProductsTable` spreads into its actions). Products never
+references WooSync. The PIM↔Woo id map lives in **`woosync_product_links`**
+(not a column on `products`), so removing the module is a table drop.
+
+### Connection (`ManageWooSync`, `/admin/woocommerce`, "WooCommerce" nav group)
+
+`woosync_settings` — single-row singleton (`WooSyncSetting::current()`), same
+shape as Branding's `Setting`. Fields: `store_url`, `consumer_key`,
+`consumer_secret` (both `encrypted` cast). **HTTPS is required** — the URL field
+rejects `http://`. "Testa connessione" probes `GET /wp-json/wc/v3/system_status`
+with the values in the form and records `last_test_ok` / `last_test_message`.
+
+Auth is **HTTP Basic** (consumer key/secret) over TLS — WooCommerce's standard
+scheme for an HTTPS store. A plain-HTTP store would need OAuth 1.0a request
+signing; that is deliberately **not** implemented. The current test store
+(`https://www.foxynet.it/demo/warpress/`) is HTTPS and works with Basic Auth.
+
+### REST client
+
+`Modules\WooSync\Support\Http\BasicAuthWooClient` implements
+`Contracts\WooCommerceClient` on Laravel's `Http` client (no third-party SDK).
+Every non-2xx / transport failure maps to a `WooSyncException` subclass with a
+translated reason: `StoreUnreachable` (connection), `AuthenticationFailed`
+(401/403), `ResourceGone` (404), `RateLimited` (429, reads `Retry-After`),
+`RequestRejected` (other 4xx, carries Woo's `message`), `StoreError` (5xx). One
+retry on `ConnectionException` only. Bound in the container behind the contract
+so the runner and payload builders never see the transport (tests use
+`Http::fake()` or `Tests\Support\FakeWooClient`).
+
+### Sync (`SyncProductsAction` — row action + bulk action on the products list)
+
+Both hidden until the connection is configured. Creates a `woosync_runs` row
+and, at `≤ config('woosync.inline_max_products')` (default **25**), runs it
+inline; above that, queues `RunWooSync` (needs the `queue:work
+--stop-when-empty` cron, like imports/exports). The user lands on the run's
+report.
+
+`WooSyncRunner` per product (`WooSyncRunnerTest` covers each path):
+
+- **simple only** — `variable` / `variant` → `skipped` with a reason; no SKU →
+  `skipped`.
+- **create vs update** — linked (`woocommerce_id`) → `PUT`; a `404` there drops
+  the stale id and recreates. Not linked → `GET /products?sku=` to adopt an
+  existing store product, else `POST`.
+- **fields (v1, fixed)** — `sku`, `name` + `description` (base language),
+  `regular_price` (default `PriceList`; missing → still pushed, noted in the
+  report), `weight` + `dimensions`, `images` (main then gallery, by public URL),
+  `categories` (see below). `manage_stock = true`.
+- **stock write-back** — the store's `stock_quantity` overwrites `product.stock`
+  (`saveQuietly`) when Woo manages stock for it.
+- **rate limit** — a `429` anywhere stops the whole run (`status = failed`,
+  partial progress kept); a small `request_delay_ms` pause (default 250ms) sits
+  between products.
+
+`CategoryResolver` maps the product's terms in the **"Categorie"** taxonomy
+(slug `categorie`) to native Woo product categories: match by base-language
+name within the parent, create what's missing (parent first), and remember each
+mapping in `woosync_category_links`.
+
+### Report (`WooSyncRunResource`, `/admin/sincronizzazioni-woocommerce`)
+
+Read-only (`canCreate() = false`), same shape as Import/Export reports: status
+badge, per-outcome counts, and a `RepeatableEntry` over the JSON `items`
+(`product`, `sku`, `result` = created/updated/skipped/failed, `reason`). The
+view blade `wire:poll.5s` while the run `isRunning()`. Delete action + bulk
+delete.
+
+### Tables
+
+`woosync_settings`, `woosync_runs`, `woosync_product_links` (`unique(product_id)`,
+`images_hash`), `woosync_category_links` (`unique(taxonomy_term_id)`). All in
+`Modules/WooSync/database/migrations/`.
+
+---
+
 ## Interface localization
 
 The **panel UI** (labels, buttons, notifications) is translatable, separately
