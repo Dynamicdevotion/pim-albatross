@@ -21,6 +21,8 @@ class ImportRecordFactory extends Factory
             'stored_path' => null,
             'status' => 'completed',
             'update_existing' => false,
+            'create_missing_terms' => false,
+            'replace_taxonomy_terms' => false,
             'mapping' => [0 => 'sku', 1 => 'name', 2 => 'price'],
             'meta' => ['header' => ['Codice', 'Nome', 'Prezzo'], 'delimiter' => ';', 'encoding' => null],
             'total_rows' => 3,

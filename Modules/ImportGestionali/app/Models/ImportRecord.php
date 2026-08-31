@@ -24,6 +24,8 @@ class ImportRecord extends Model
         'stored_path',
         'status',
         'update_existing',
+        'create_missing_terms',
+        'replace_taxonomy_terms',
         'mapping',
         'meta',
         'total_rows',
@@ -40,6 +42,8 @@ class ImportRecord extends Model
     {
         return [
             'update_existing' => 'boolean',
+            'create_missing_terms' => 'boolean',
+            'replace_taxonomy_terms' => 'boolean',
             'mapping' => 'array',
             'meta' => 'array',
             'issues' => 'array',

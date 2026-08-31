@@ -30,19 +30,28 @@ final class FieldGuesser
 
     /**
      * @param  list<string>  $header
-     * @return array<int, string> column index => field ('' when not guessed)
+     * @param  array<int, string>  $taxonomies  id => name; a header that matches
+     *                                          a taxonomy name exactly (normalized)
+     *                                          is pre-mapped to `taxonomy:{id}`
+     * @return array<int, string> column index => target ('' when not guessed)
      */
-    public static function forHeader(array $header): array
+    public static function forHeader(array $header, array $taxonomies = []): array
     {
+        $taxonomyByName = [];
+
+        foreach ($taxonomies as $id => $name) {
+            $taxonomyByName[self::normalize($name)] = MappingTarget::forTaxonomy($id);
+        }
+
         $mapping = [];
         $taken = [];
 
         foreach ($header as $index => $name) {
-            $field = self::guess($name);
-            $mapping[$index] = ($field !== null && ! isset($taken[$field])) ? $field : '';
+            $target = $taxonomyByName[self::normalize($name)] ?? self::guess($name);
+            $mapping[$index] = ($target !== null && $target !== '' && ! isset($taken[$target])) ? $target : '';
 
             if ($mapping[$index] !== '') {
-                $taken[$field] = true;
+                $taken[$mapping[$index]] = true;
             }
         }
 

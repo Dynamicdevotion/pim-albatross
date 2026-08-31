@@ -205,6 +205,10 @@ return [
             'preview' => 'Preview',
         ],
         'confirm' => 'Confirm and import',
+        'group' => [
+            'fields' => 'Product fields',
+            'taxonomies' => 'Taxonomies',
+        ],
         'field' => [
             'file' => 'CSV or Excel file',
             'ignore' => '— ignore this column —',
@@ -221,11 +225,15 @@ return [
             'image_url' => 'Main image (URL)',
             'gallery_urls' => 'Gallery (URLs separated by |)',
             'update_existing' => 'Update products that already exist',
+            'create_missing_terms' => 'Create missing terms automatically',
+            'replace_taxonomy_terms' => 'Replace existing terms for the mapped taxonomies',
         ],
         'help' => [
             'file' => 'Accepted formats: CSV, XLSX, ODS. The old .xls format (Excel 97-2003) is not supported — save it as .xlsx or .csv.',
-            'map' => 'For each column in the file, choose the system field it maps to. SKU is required: it is the key products are matched on. Image columns hold URLs to download the files from; mapping one always sends the import to the queue.',
+            'map' => 'For each column in the file, choose the system field it maps to. SKU is required: it is the key products are matched on. Image columns hold URLs to download the files from; mapping one always sends the import to the queue. A column can also be mapped to a taxonomy: the cell holds one or more term names separated by |.',
             'update_existing' => 'Off: rows whose SKU already exists are skipped and listed in the report. On: they update the existing product; fields left empty are not touched.',
+            'create_missing_terms' => 'Off: a term not found in the taxonomy is reported and ignored. On: the term is created on the fly in the matching taxonomy.',
+            'replace_taxonomy_terms' => 'Off: resolved terms are added to those already on the product. On: for each mapped taxonomy, the cell\'s terms replace the current ones (only when at least one term resolves).',
             'sample' => 'e.g. :values',
         ],
         'preview' => [
@@ -237,6 +245,8 @@ return [
             'will_create' => 'Will be created',
             'will_update' => 'Will update the existing one',
             'will_skip' => 'Skipped',
+            'tax_missing' => 'not found',
+            'tax_gone' => 'taxonomy no longer available',
         ],
         'notify' => [
             'done' => 'Import complete',
@@ -300,6 +310,8 @@ return [
             'negative' => 'row :line: :field cannot be negative (":value")',
             'image_main' => 'row :line: main image — :detail',
             'image_gallery' => 'row :line: gallery — :ok/:total images imported (:failed not downloaded)',
+            'term_not_found' => 'row :line: term ":term" not found in the :taxonomy taxonomy, ignored',
+            'taxonomy_gone' => 'row :line: a mapped taxonomy is no longer available, links ignored',
         ],
         'image' => [
             'bad_url' => 'invalid URL (:url)',

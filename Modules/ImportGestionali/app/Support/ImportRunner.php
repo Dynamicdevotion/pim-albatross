@@ -26,7 +26,7 @@ class ImportRunner
         }
 
         $reader = app(SpreadsheetReader::class);
-        $importer = ProductRowImporter::make();
+        $importer = ProductRowImporter::make($record->create_missing_terms, $record->replace_taxonomy_terms);
         $meta = $record->meta ?? [];
         $cap = (int) config('importgestionali.issues_cap', 500);
 

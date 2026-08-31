@@ -205,6 +205,10 @@ return [
             'preview' => 'Anteprima',
         ],
         'confirm' => 'Conferma e importa',
+        'group' => [
+            'fields' => 'Campi prodotto',
+            'taxonomies' => 'Tassonomie',
+        ],
         'field' => [
             'file' => 'File CSV o Excel',
             'ignore' => '— ignora questa colonna —',
@@ -221,11 +225,15 @@ return [
             'image_url' => 'Immagine principale (URL)',
             'gallery_urls' => 'Galleria (URL separati da |)',
             'update_existing' => 'Aggiorna i prodotti già presenti',
+            'create_missing_terms' => 'Crea automaticamente i termini mancanti',
+            'replace_taxonomy_terms' => 'Sostituisci i termini esistenti per le tassonomie mappate',
         ],
         'help' => [
             'file' => 'Formati accettati: CSV, XLSX, ODS. Il vecchio formato .xls (Excel 97-2003) non è supportato: esportalo come .xlsx o .csv.',
-            'map' => 'Per ogni colonna del file scegli il campo del sistema a cui corrisponde. SKU è obbligatorio: è la chiave con cui i prodotti vengono riconosciuti. Le colonne immagine contengono URL da cui scaricare i file; se ne mappi una, l\'import viene sempre elaborato in coda.',
+            'map' => 'Per ogni colonna del file scegli il campo del sistema a cui corrisponde. SKU è obbligatorio: è la chiave con cui i prodotti vengono riconosciuti. Le colonne immagine contengono URL da cui scaricare i file; se ne mappi una, l\'import viene sempre elaborato in coda. Puoi anche mappare una colonna a una tassonomia: la cella contiene uno o più nomi di termine separati da |.',
             'update_existing' => 'Disattivato: le righe con uno SKU già presente vengono saltate e segnalate nel report. Attivato: aggiornano il prodotto esistente; i campi lasciati vuoti non vengono toccati.',
+            'create_missing_terms' => 'Disattivato: un termine non trovato nella tassonomia viene segnalato nel report e ignorato. Attivato: il termine viene creato al volo nella tassonomia corrispondente.',
+            'replace_taxonomy_terms' => 'Disattivato: i termini risolti si aggiungono a quelli già presenti sul prodotto. Attivato: per ogni tassonomia mappata, i termini della cella sostituiscono quelli attuali (solo se almeno un termine risolve).',
             'sample' => 'es. :values',
         ],
         'preview' => [
@@ -237,6 +245,8 @@ return [
             'will_create' => 'Verrà creato',
             'will_update' => "Aggiornerà l'esistente",
             'will_skip' => 'Saltata',
+            'tax_missing' => 'non trovato',
+            'tax_gone' => 'tassonomia non più disponibile',
         ],
         'notify' => [
             'done' => 'Import completato',
@@ -300,6 +310,8 @@ return [
             'negative' => 'riga :line: :field non può essere negativo («:value»)',
             'image_main' => 'riga :line: immagine principale — :detail',
             'image_gallery' => 'riga :line: galleria — :ok/:total immagini importate (:failed non scaricate)',
+            'term_not_found' => 'riga :line: termine «:term» non trovato nella tassonomia :taxonomy, ignorato',
+            'taxonomy_gone' => 'riga :line: una tassonomia mappata non è più disponibile, associazioni ignorate',
         ],
         'image' => [
             'bad_url' => 'URL non valido (:url)',
