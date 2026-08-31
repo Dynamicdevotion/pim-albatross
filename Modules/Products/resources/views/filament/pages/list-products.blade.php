@@ -32,6 +32,8 @@
             >
                 {{ __('filament-tables::table.actions.filter.label') }}
             </x-filament::button>
+
+            {{ $this->exportAction }}
         </div>
     </div>
 

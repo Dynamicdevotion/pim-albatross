@@ -18,6 +18,7 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Modules\ExportProdotti\Filament\ExportProdottiPanelPlugin;
 use Modules\ImportGestionali\Filament\ImportGestionaliPanelPlugin;
 use Modules\Localization\Filament\LocalizationPanelPlugin;
 use Modules\Pricing\Filament\PricingPanelPlugin;
@@ -51,6 +52,7 @@ class AdminPanelProvider extends PanelProvider
                 TaxonomiesPanelPlugin::make(),
                 PricingPanelPlugin::make(),
                 ImportGestionaliPanelPlugin::make(),
+                ExportProdottiPanelPlugin::make(),
             ])
             ->middleware([
                 EncryptCookies::class,

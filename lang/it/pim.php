@@ -310,4 +310,76 @@ return [
             'bad_type' => 'formato non supportato (:type) — ammessi JPG, PNG, WebP',
         ],
     ],
+
+    // Modulo ExportProdotti — export prodotti in CSV/XLSX.
+    'export' => [
+        'nav' => [
+            'group' => 'Export',
+            'history' => 'Esiti export',
+        ],
+        'record' => [
+            'label' => 'Esito export',
+            'plural' => 'Esiti export',
+        ],
+        'action' => [
+            'trigger' => 'Esporta',
+            'download' => 'Scarica',
+        ],
+        'modal' => [
+            'heading' => 'Esporta prodotti',
+            'description' => 'Vengono esportati tutti i prodotti che corrispondono ai filtri attivi nella lista, senza limiti di pagina. Le varianti dei prodotti variabili sono incluse come righe separate.',
+            'submit' => 'Esporta',
+            'summary' => '{0} Nessun prodotto corrisponde ai filtri correnti|{1} :count prodotto corrisponde ai filtri correnti|[2,*] :count prodotti corrispondono ai filtri correnti',
+        ],
+        'field' => [
+            'format' => 'Formato',
+            'columns' => 'Colonne da includere',
+        ],
+        'format' => [
+            'xlsx' => 'Excel (.xlsx)',
+            'csv' => 'CSV (.csv)',
+        ],
+        'column' => [
+            'sku' => 'SKU',
+            'name' => 'Nome (lingua base)',
+            'description' => 'Descrizione (lingua base)',
+            'price' => 'Prezzo (listino predefinito)',
+            'stock' => 'Giacenza',
+            'weight' => 'Peso',
+            'length' => 'Lunghezza',
+            'width' => 'Larghezza',
+            'height' => 'Altezza',
+            'status' => 'Stato',
+            'image_url' => 'Immagine principale (URL)',
+            'gallery_urls' => 'Galleria (URL separati da |)',
+        ],
+        'notify' => [
+            'queued' => 'Export avviato: il catalogo è grande, l\'elaborazione prosegue in coda. Puoi seguire l\'avanzamento in questa pagina.',
+        ],
+        'status' => [
+            'pending' => 'In coda',
+            'processing' => 'In corso',
+            'completed' => 'Completato',
+            'failed' => 'Fallito',
+        ],
+        'col' => [
+            'when' => 'Data',
+            'user' => 'Utente',
+            'format' => 'Formato',
+            'columns' => 'Colonne',
+            'rows' => 'Righe',
+        ],
+        'report' => [
+            'summary' => 'Riepilogo',
+            'started' => 'Iniziato',
+            'finished' => 'Terminato',
+            'rows' => 'Righe esportate',
+            'columns' => 'Colonne',
+            'error' => 'Errore',
+            'running_hint' => 'L\'export è ancora in corso. La pagina si aggiorna da sola; il pulsante di download compare appena il file è pronto.',
+        ],
+        'error' => [
+            'unexpected' => 'Errore imprevisto durante l\'export.',
+        ],
+    ],
 ];

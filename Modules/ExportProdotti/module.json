@@ -1,0 +1,11 @@
+{
+    "name": "ExportProdotti",
+    "alias": "exportprodotti",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\ExportProdotti\\Providers\\ExportProdottiServiceProvider"
+    ],
+    "files": []
+}

@@ -4,5 +4,6 @@
     "Taxonomies": true,
     "Pricing": true,
     "SavedViews": true,
-    "ImportGestionali": true
+    "ImportGestionali": true,
+    "ExportProdotti": true
 }

@@ -643,6 +643,105 @@ older than `prune_days` (7); the `ImportRecord` rows (the reports) are kept.
 
 ---
 
+## ExportProdotti module
+
+Exports products to **CSV or XLSX**, the natural complement of ImportGestionali
+— a file exported here can be fed straight back into the importer (same column
+vocabulary as `TargetField`).
+
+Structure (`Modules/ExportProdotti/`):
+
+```
+app/
+├── Filament/
+│   ├── ExportProdottiPanelPlugin.php         # discoverResources
+│   └── Resources/ExportRecords/              # read-only run history + report/download page
+├── Enums/ExportColumn.php                    # sku / name / description / price / stock / weight / length / width / height / status / image_url / gallery_urls
+├── Jobs/RunProductExport.php                 # queued run for large catalogues
+├── Models/ExportRecord.php                   # one export run + its outcome
+├── Console/PruneExportFilesCommand.php       # exportprodotti:prune-files
+└── Support/
+    ├── SpreadsheetWriter.php                 # openspout wrapper: streaming CSV / XLSX writer
+    ├── ProductExportRow.php                  # one Product (or variant) → the ordered cell values
+    └── ExportRunner.php                      # build the query, stream it to the file, keep the record current
+config/config.php                             # inline_max_rows, disk, prune_days
+database/migrations/2026_08_31_120000_create_export_records_table.php
+```
+
+### The "Esporta" action (products list)
+
+`ListProducts` renders an **Esporta** button next to the Filters / Columns
+controls. It opens a **slide-over** (native Filament action modal — not the
+bespoke filter drawer) with:
+
+- **Formato** — CSV or XLSX (XLSX pre-selected);
+- **Colonne da includere** — a `CheckboxList` of the twelve `ExportColumn`
+  values, pre-ticked from the columns currently visible in the list (the
+  column-manager state: `sku`, `name` → base name, `stock`, the four
+  dimensions, `status`, `main_image` → `image_url`; export-only columns
+  `description` / `price` / `gallery_urls` have no list column and start
+  unticked). If nothing maps, it falls back to `sku, name, price, stock,
+  status`.
+
+**What is exported**
+
+- **Every product matching the filters currently applied to the list**
+  (`ProductListQuery` — the same faceted taxonomy / price / stock / search /
+  type / status / missing-translation clauses the drawer uses), pagination
+  ignored.
+- **Variants as their own rows**: a `variable` container is written as one row
+  (its own name / status / images; no price, stock or dimensions), followed by
+  one row per child variant with the variant's own SKU / price / stock /
+  dimensions and its own-or-inherited name and images.
+- `name` / `description` are the **base-language** translation; `price` is the
+  amount on the **default price list**, formatted `1234.56`; `image_url` is the
+  public URL of the main image (a variant inherits the parent's), `gallery_urls`
+  is the gallery URLs joined with `|`. All values are chosen so the file
+  round-trips through ImportGestionali.
+
+### Inline vs queued
+
+The matching **top-level** product count (before variant expansion) decides:
+
+| | |
+|---|---|
+| ≤ `inline_max_rows` (**1000**) | generated in the request, streamed straight to the browser as a download |
+| > 1000 | an `ExportRecord` is created, `RunProductExport` is queued, and the user is sent to the run's report page, which polls (`wire:poll`) until the file is ready and then shows a **Scarica** button |
+
+Same Netsons caveat as the importer: the queue only drains through the cron
+`* * * * * cd ~/apps/pim && php artisan schedule:run` — without it a large
+export stays `pending`, while everything up to 1000 products still works inline.
+`exportprodotti:prune-files` (scheduled `dailyAt('03:20')`) deletes generated
+files older than `prune_days` (7); the `ExportRecord` rows are kept.
+
+### `ProductListQuery` (Products module)
+
+`Modules\Products\Support\ProductListQuery` is the **single source of truth** for
+the products-list query: the base scope (`applyBase()` — top-level rows +
+eager loads, wired into the table's `modifyQueryUsing`) and one static method
+per filter clause. `ProductsTable` routes every filter's `query()` to it, and
+`ExportRunner::query()` rebuilds the identical query from a saved `tableFilters`
+snapshot — so an export can never drift from what the list shows.
+
+### `export_records` table
+
+| Column | Notes |
+|---|---|
+| `user_id` | FK → `users`, `nullOnDelete` |
+| `format` | `csv` / `xlsx` |
+| `columns` | json — the chosen `ExportColumn` keys, stored in canonical order |
+| `filters` | json — the `tableFilters` snapshot the list was showing |
+| `sort` | json — `{column, direction}` or null |
+| `status` | `pending` → `processing` → `completed` \| `failed` |
+| `total_rows` | top-level products matched (variant rows added on top at write time) |
+| `row_count` | data rows actually written |
+| `stored_path` | on the export disk; nulled by the prune command |
+| `original_filename` | `export-prodotti-YYYYMMDD-HHMMSS.<ext>` |
+| `error_message` | set on a failed run |
+| `started_at` / `finished_at` | timestamps |
+
+---
+
 ## Interface localization
 
 The **panel UI** (labels, buttons, notifications) is translatable, separately
