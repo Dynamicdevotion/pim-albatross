@@ -62,6 +62,14 @@ class BasicAuthWooClient implements WooCommerceClient
         return $this->request('put', "products/{$wooId}", $payload)->json() ?? [];
     }
 
+    public function deleteProduct(int $wooId, bool $force = false): void
+    {
+        // Sent as an explicit string, not the raw PHP boolean: `delete()`
+        // serializes $data as a query string, and `false` would collapse to
+        // an empty string — ambiguous for the store's `force` flag.
+        $this->request('delete', "products/{$wooId}", ['force' => $force ? 'true' : 'false']);
+    }
+
     public function listCategories(array $query = []): array
     {
         return $this->request('get', 'products/categories', $query)->json() ?? [];

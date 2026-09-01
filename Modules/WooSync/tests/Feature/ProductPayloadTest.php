@@ -50,6 +50,7 @@ class ProductPayloadTest extends TestCase
 
         $this->assertSame('simple', $body['type']);
         $this->assertSame('SKU-1', $body['sku']);
+        $this->assertSame('draft', $body['status']);
         $this->assertSame('Sedia', $body['name']);
         $this->assertSame('Una sedia comoda', $body['description']);
         $this->assertSame('19.90', $body['regular_price']);
@@ -62,6 +63,24 @@ class ProductPayloadTest extends TestCase
         $this->assertArrayHasKey('src', $body['images'][0]);
         $this->assertSame([['id' => 42]], $body['categories']);
         $this->assertSame([], $payload->warnings);
+    }
+
+    public function test_an_active_product_maps_to_publish(): void
+    {
+        $product = $this->product(['status' => 'active']);
+
+        $body = ProductPayload::for($product)->build();
+
+        $this->assertSame('publish', $body['status']);
+    }
+
+    public function test_a_draft_product_maps_to_draft(): void
+    {
+        $product = $this->product(['status' => 'draft']);
+
+        $body = ProductPayload::for($product)->build();
+
+        $this->assertSame('draft', $body['status']);
     }
 
     public function test_a_missing_default_list_price_is_a_warning_not_a_blocker(): void

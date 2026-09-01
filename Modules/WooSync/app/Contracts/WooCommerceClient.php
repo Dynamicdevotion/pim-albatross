@@ -60,6 +60,14 @@ interface WooCommerceClient
     public function updateProduct(int $wooId, array $payload): array;
 
     /**
+     * Delete a store product. With `force: false` (the default) this moves it
+     * to the WooCommerce trash rather than deleting it permanently.
+     *
+     * @throws WooSyncException
+     */
+    public function deleteProduct(int $wooId, bool $force = false): void;
+
+    /**
      * @param  array<string, mixed>  $query
      * @return list<array<string, mixed>>
      */

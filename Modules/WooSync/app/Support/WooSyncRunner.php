@@ -117,6 +117,10 @@ class WooSyncRunner
 
         $base = ['product' => (string) $label, 'sku' => (string) $product->sku];
 
+        if ($product->status === 'archived') {
+            return $base + $this->skipArchived($product);
+        }
+
         if (! $product->isSimple()) {
             return $base + ['result' => 'skipped', 'reason' => __('pim.woosync.skip.not_simple')];
         }
@@ -170,6 +174,35 @@ class WooSyncRunner
             throw $e;
         } catch (WooSyncException $e) {
             return $base + ['result' => 'failed', 'reason' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * An archived product is never created or updated on the store. If it was
+     * already synced before being archived, it is still `publish` on
+     * WooCommerce — send a status-only update to `draft` so the two sides
+     * don't stay silently out of sync. A failure here doesn't fail the run:
+     * it's still reported as `skipped`, just with a note that the store side
+     * couldn't be aligned.
+     *
+     * @return array{result: string, reason: string}
+     */
+    private function skipArchived(Product $product): array
+    {
+        $link = WooSyncProductLink::query()->where('product_id', $product->id)->first();
+
+        if ($link === null || $link->woocommerce_id === null) {
+            return ['result' => 'skipped', 'reason' => __('pim.woosync.skip.archived')];
+        }
+
+        try {
+            $this->client->updateProduct((int) $link->woocommerce_id, ['status' => 'draft']);
+
+            return ['result' => 'skipped', 'reason' => __('pim.woosync.skip.archived_drafted')];
+        } catch (RateLimited $e) {
+            throw $e;
+        } catch (WooSyncException) {
+            return ['result' => 'skipped', 'reason' => __('pim.woosync.skip.archived_draft_failed')];
         }
     }
 

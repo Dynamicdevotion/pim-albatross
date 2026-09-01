@@ -522,6 +522,7 @@ return [
         'notify' => [
             'queued' => 'Sincronizzazione in coda: verrà elaborata a breve.',
             'done' => 'Sincronizzazione completata: :created creati, :updated aggiornati, :skipped saltati, :failed falliti.',
+            'delete_failed' => 'Prodotto «:product» eliminato dal PIM, ma la cancellazione su WooCommerce non è riuscita: intervento manuale necessario.',
         ],
         'notification' => [
             'saved' => 'Impostazioni WooCommerce salvate.',
@@ -570,6 +571,9 @@ return [
         'skip' => [
             'not_simple' => 'Saltato: in questa versione sono sincronizzabili solo i prodotti semplici.',
             'no_sku' => 'Saltato: SKU mancante.',
+            'archived' => 'Saltato: prodotto archiviato, non sincronizzato.',
+            'archived_drafted' => 'Saltato: prodotto archiviato — impostato in bozza su WooCommerce.',
+            'archived_draft_failed' => 'Saltato: prodotto archiviato — impossibile aggiornare lo stato su WooCommerce (resta pubblicato).',
         ],
         'warn' => [
             'no_price' => 'Nessun prezzo sul listino predefinito: inviato senza prezzo.',

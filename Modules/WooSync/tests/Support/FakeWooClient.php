@@ -32,6 +32,9 @@ class FakeWooClient implements WooCommerceClient
     /** @var array<int, array<string, mixed>> keyed by woo id */
     public array $updatePayloads = [];
 
+    /** @var list<int> woo ids passed to deleteProduct, in call order */
+    public array $deletedIds = [];
+
     /** @var array<string, array<string, mixed>> keyed by SKU */
     public array $productsBySku = [];
 
@@ -51,6 +54,9 @@ class FakeWooClient implements WooCommerceClient
 
     /** @var (Closure(int, array<string, mixed>): array<string, mixed>)|null */
     public ?Closure $onUpdateProduct = null;
+
+    /** @var (Closure(int, bool): void)|null throw from here to simulate a failed delete */
+    public ?Closure $onDeleteProduct = null;
 
     public function ping(): void
     {
@@ -130,6 +136,20 @@ class FakeWooClient implements WooCommerceClient
         }
 
         return $updated;
+    }
+
+    public function deleteProduct(int $wooId, bool $force = false): void
+    {
+        $this->calls[] = 'deleteProduct:'.$wooId.':'.($force ? 'force' : 'trash');
+
+        if ($this->onDeleteProduct !== null) {
+            ($this->onDeleteProduct)($wooId, $force);
+
+            return;
+        }
+
+        $this->deletedIds[] = $wooId;
+        unset($this->productsById[$wooId]);
     }
 
     public function listCategories(array $query = []): array
