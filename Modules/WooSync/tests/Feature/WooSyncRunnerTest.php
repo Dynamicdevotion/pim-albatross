@@ -236,18 +236,21 @@ class WooSyncRunnerTest extends TestCase
         $this->assertStringContainsString(__('pim.woosync.stock.clamped'), (string) $run->items[0]['reason']);
     }
 
-    public function test_variable_and_variant_products_are_skipped_with_a_reason(): void
+    public function test_a_standalone_variant_is_always_skipped_with_a_reason(): void
     {
-        $variable = Product::factory()->variable()->create(['sku' => 'VARB']);
-        $variable->translations()->create(['locale' => 'it', 'name' => 'Variabile']);
+        $parent = Product::factory()->variable()->create(['sku' => 'VARB-STANDALONE']);
+        $parent->translations()->create(['locale' => 'it', 'name' => 'Variabile']);
+        $variant = Product::factory()->variantOf($parent)->create(['sku' => 'VARB-STANDALONE-V1']);
+        $variant->translations()->create(['locale' => 'it', 'name' => 'Variante']);
 
         $client = new FakeWooClient;
-        (new WooSyncRunner($client))->run($run = $this->makeRun([$variable->id]));
+        (new WooSyncRunner($client))->run($run = $this->makeRun([$variant->id]));
         $run->refresh();
 
         $this->assertSame(1, $run->skipped_count);
         $this->assertSame('skipped', $run->items[0]['result']);
-        $this->assertNotContains('createProduct', $client->calls);
+        $this->assertSame(__('pim.woosync.skip.variant_standalone'), $run->items[0]['reason']);
+        $this->assertSame([], $client->calls);
     }
 
     public function test_an_archived_product_never_synced_before_is_skipped_with_no_woo_call(): void

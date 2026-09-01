@@ -511,7 +511,7 @@ return [
         ],
         'confirm' => [
             'single' => 'Send product ":product" to the WooCommerce store?',
-            'bulk' => 'Send the selected products to the WooCommerce store? Only simple products are synced.',
+            'bulk' => 'Send the selected products to the WooCommerce store? Simple and variable products are synced (variants are never sent as products of their own, only as part of their parent).',
         ],
         'test' => [
             'ok' => 'Connection succeeded.',
@@ -569,7 +569,7 @@ return [
             'item_reason' => 'Detail',
         ],
         'skip' => [
-            'not_simple' => 'Skipped: only simple products can be synced in this version.',
+            'variant_standalone' => 'Skipped: variants are never synced on their own, only as part of their variable product.',
             'no_sku' => 'Skipped: missing SKU.',
             'archived' => 'Skipped: archived product, not synced.',
             'archived_trashed' => 'Skipped: archived product — moved to trash on WooCommerce.',
@@ -578,6 +578,13 @@ return [
         'warn' => [
             'no_price' => 'No price on the default price list: sent without a price.',
             'no_name' => 'Missing name in the base language (:locale): used the SKU.',
+            'variant_missing_attribute' => 'Variant ":variant": no value for attribute ":attribute", left out of that combination.',
+        ],
+        // Per-variation notes (variable products): land in the "Detail"
+        // field of the parent's row in the per-product outcome.
+        'variant' => [
+            'note' => 'Variant ":variant": :note',
+            'failed' => 'Variant ":variant" not synced: :error',
         ],
         // Stock reconciliation notes (delta model, last_known_stock on
         // woosync_product_links): they land in the per-product "Detail" column

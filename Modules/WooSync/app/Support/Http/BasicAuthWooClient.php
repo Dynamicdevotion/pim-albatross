@@ -80,6 +80,46 @@ class BasicAuthWooClient implements WooCommerceClient
         return $this->request('post', 'products/categories', $payload)->json() ?? [];
     }
 
+    public function listAttributes(array $query = []): array
+    {
+        return $this->request('get', 'products/attributes', $query)->json() ?? [];
+    }
+
+    public function createAttribute(array $payload): array
+    {
+        return $this->request('post', 'products/attributes', $payload)->json() ?? [];
+    }
+
+    public function listAttributeTerms(int $attributeId, array $query = []): array
+    {
+        return $this->request('get', "products/attributes/{$attributeId}/terms", $query)->json() ?? [];
+    }
+
+    public function createAttributeTerm(int $attributeId, array $payload): array
+    {
+        return $this->request('post', "products/attributes/{$attributeId}/terms", $payload)->json() ?? [];
+    }
+
+    public function getVariation(int $productId, int $variationId): array
+    {
+        return $this->request('get', "products/{$productId}/variations/{$variationId}")->json() ?? [];
+    }
+
+    public function createVariation(int $productId, array $payload): array
+    {
+        return $this->request('post', "products/{$productId}/variations", $payload)->json() ?? [];
+    }
+
+    public function updateVariation(int $productId, int $variationId, array $payload): array
+    {
+        return $this->request('put', "products/{$productId}/variations/{$variationId}", $payload)->json() ?? [];
+    }
+
+    public function deleteVariation(int $productId, int $variationId, bool $force = false): void
+    {
+        $this->request('delete', "products/{$productId}/variations/{$variationId}", ['force' => $force ? 'true' : 'false']);
+    }
+
     /**
      * @param  array<string, mixed>  $data  query string for GET, JSON body otherwise
      *

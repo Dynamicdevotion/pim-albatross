@@ -43,6 +43,15 @@ class ProductDeletionSyncTest extends TestCase
         return $product->fresh();
     }
 
+    private function variant(string $sku, ?Product $parent = null): Product
+    {
+        $parent ??= Product::factory()->variable()->create(['sku' => $sku.'-PARENT']);
+        $variant = Product::factory()->variantOf($parent)->create(['sku' => $sku]);
+        $variant->translations()->create(['locale' => 'it', 'name' => 'V '.$sku]);
+
+        return $variant->fresh();
+    }
+
     public function test_deleting_a_linked_product_propagates_a_trash_delete_to_woo(): void
     {
         $product = $this->simple('DEL-1');
@@ -95,5 +104,34 @@ class ProductDeletionSyncTest extends TestCase
             ->once()
             ->withArgs(fn (string $message, array $context): bool => $context['woocommerce_id'] === 901
                 && $context['sku'] === 'DEL-4');
+    }
+
+    public function test_deleting_a_variant_of_a_synced_parent_deletes_the_variation_not_a_product(): void
+    {
+        $parent = Product::factory()->variable()->create(['sku' => 'DEL-5-PARENT']);
+        WooSyncProductLink::create(['product_id' => $parent->id, 'woocommerce_id' => 700]);
+        $variant = $this->variant('DEL-5', $parent);
+        WooSyncProductLink::create(['product_id' => $variant->id, 'woocommerce_id' => 950]);
+
+        $variant->delete();
+
+        $this->assertContains('deleteVariation:700:950:trash', $this->client->calls);
+        $this->assertNotContains('deleteProduct:950:trash', $this->client->calls);
+        $this->assertDatabaseMissing('products', ['id' => $variant->id]);
+        $this->assertDatabaseMissing('woosync_product_links', ['product_id' => $variant->id]);
+        // The parent itself is untouched by deleting one of its variants.
+        $this->assertDatabaseHas('products', ['id' => $parent->id]);
+    }
+
+    public function test_deleting_a_variant_of_a_never_synced_parent_never_calls_woo(): void
+    {
+        $parent = Product::factory()->variable()->create(['sku' => 'DEL-6-PARENT']);
+        $variant = $this->variant('DEL-6', $parent);
+        WooSyncProductLink::create(['product_id' => $variant->id, 'woocommerce_id' => 951]);
+
+        $variant->delete();
+
+        $this->assertSame([], $this->client->calls);
+        $this->assertDatabaseMissing('woosync_product_links', ['product_id' => $variant->id]);
     }
 }
