@@ -207,6 +207,30 @@ class WooSyncRunnerVariableTest extends TestCase
         $this->assertArrayNotHasKey('image', $updatePayload);
     }
 
+    public function test_a_variation_trashed_by_a_parent_archive_cycle_is_republished_on_update(): void
+    {
+        // WooCommerce trashes variations individually when their parent is
+        // trashed, and leaves them there — a plain product-status update on
+        // the parent does not touch them. Caught live against the demo
+        // store: a variation payload with no `status` field silently left
+        // variations stuck in `trash` even after the parent came back to
+        // `publish`.
+        $parent = $this->variableWithVariants('VARB-9', count: 1);
+        $client = new FakeWooClient;
+        (new WooSyncRunner($client))->run($this->makeRun([$parent->id]));
+
+        $variant = $parent->variants->first();
+        $parentWooId = WooSyncProductLink::firstWhere('product_id', $parent->id)->woocommerce_id;
+        $variationWooId = WooSyncProductLink::firstWhere('product_id', $variant->id)->woocommerce_id;
+        $client->variationsById[$parentWooId][$variationWooId]['status'] = 'trash';
+
+        (new WooSyncRunner($client))->run($run = $this->makeRun([$parent->fresh()->id]));
+        $run->refresh();
+
+        $this->assertSame('publish', $client->updateVariationPayloads[$parentWooId.':'.$variationWooId]['status']);
+        $this->assertSame('publish', $client->variationsById[$parentWooId][$variationWooId]['status']);
+    }
+
     public function test_a_variant_missing_a_default_price_still_creates_but_is_noted(): void
     {
         $parent = $this->variableWithVariants('VARB-6', count: 1);

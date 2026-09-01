@@ -38,6 +38,15 @@ class VariationPayload
     {
         $payload = [
             'sku' => (string) $this->variant->sku,
+            // A variant is only ever synced while its parent is being
+            // actively pushed (archived parents never reach here — see
+            // WooSyncRunner::skipArchived()), so `publish` is always right.
+            // Explicit on every call, not just creation: WooCommerce trashes
+            // variations individually when their parent is trashed, and
+            // leaves them there — a later update has to re-assert this to
+            // bring them back, or they silently stay unpurchasable even once
+            // the parent itself is `publish` again.
+            'status' => 'publish',
             'attributes' => $attributes,
         ];
 
