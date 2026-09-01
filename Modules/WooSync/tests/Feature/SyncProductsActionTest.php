@@ -92,6 +92,54 @@ class SyncProductsActionTest extends TestCase
         $this->assertSame('pending', WooSyncRun::sole()->status);
     }
 
+    private function variableWithVariants(string $sku, int $variants): Product
+    {
+        $parent = Product::factory()->variable()->create(['sku' => $sku]);
+        $parent->translations()->create(['locale' => 'it', 'name' => 'P '.$sku]);
+
+        for ($i = 0; $i < $variants; $i++) {
+            $variant = Product::factory()->variantOf($parent)->create(['sku' => $sku.'-V'.$i]);
+            $variant->translations()->create(['locale' => 'it', 'name' => 'V'.$i]);
+        }
+
+        return $parent->fresh();
+    }
+
+    public function test_a_heavy_variable_product_is_queued_even_as_a_single_selection(): void
+    {
+        $this->configureConnection();
+        config(['woosync.inline_max_products' => 5]);
+
+        // Weight = 2 (parent + attribute overhead) + 5 variants = 7 > 5, even
+        // though this is a single-row "Sincronizza" on one product.
+        $parent = $this->variableWithVariants('HEAVY-1', 5);
+
+        Queue::fake();
+
+        Livewire::test(ListProducts::class)
+            ->callAction(TestAction::make('woosync')->table($parent));
+
+        Queue::assertPushed(RunWooSync::class, 1);
+        $this->assertSame('pending', WooSyncRun::sole()->status);
+    }
+
+    public function test_a_small_variable_product_still_runs_inline(): void
+    {
+        $this->configureConnection();
+        config(['woosync.inline_max_products' => 25]);
+
+        // Weight = 2 + 1 variant = 3, well under the default threshold.
+        $parent = $this->variableWithVariants('SMALL-1', 1);
+
+        Queue::fake();
+
+        Livewire::test(ListProducts::class)
+            ->callAction(TestAction::make('woosync')->table($parent));
+
+        Queue::assertNothingPushed();
+        $this->assertSame('completed', WooSyncRun::sole()->status);
+    }
+
     public function test_the_action_is_hidden_until_the_connection_is_configured(): void
     {
         $product = $this->product('HID-1');

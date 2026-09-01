@@ -12,6 +12,15 @@ use Modules\Products\Models\Product;
  * so the module stays fully removable — dropping WooSync drops this table and
  * leaves `products` untouched.
  *
+ * One row per `Product` row regardless of type — `product_id` is unique here
+ * exactly as it is unique in `products`. What `woocommerce_id` *means*
+ * depends on the linked product's type: for a `simple` product or a
+ * `variable` parent it is a top-level Woo product id; for a `variant` it is
+ * the id of a Woo *variation*, scoped under its parent's own
+ * `woocommerce_id` (`/products/{parent}/variations/{this}`) — never a
+ * product id on its own. Callers always know which is which from
+ * `$product->type`, so no extra column distinguishes them.
+ *
  * `images_hash` fingerprints the image set last pushed, so a later update can
  * skip re-sending unchanged images.
  *

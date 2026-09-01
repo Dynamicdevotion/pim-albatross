@@ -511,7 +511,7 @@ return [
         ],
         'confirm' => [
             'single' => 'Inviare il prodotto «:product» al negozio WooCommerce?',
-            'bulk' => 'Inviare i prodotti selezionati al negozio WooCommerce? Verranno sincronizzati solo i prodotti semplici.',
+            'bulk' => 'Inviare i prodotti selezionati al negozio WooCommerce? Vengono sincronizzati i prodotti semplici e variabili (le varianti non vengono mai inviate come prodotti a sé, solo come parte del loro padre).',
         ],
         'test' => [
             'ok' => 'Connessione riuscita.',
@@ -569,7 +569,7 @@ return [
             'item_reason' => 'Dettaglio',
         ],
         'skip' => [
-            'not_simple' => 'Saltato: in questa versione sono sincronizzabili solo i prodotti semplici.',
+            'variant_standalone' => 'Saltato: le varianti non vengono sincronizzate singolarmente, solo come parte del prodotto variabile.',
             'no_sku' => 'Saltato: SKU mancante.',
             'archived' => 'Saltato: prodotto archiviato, non sincronizzato.',
             'archived_trashed' => 'Saltato: prodotto archiviato — spostato nel cestino su WooCommerce.',
@@ -578,6 +578,13 @@ return [
         'warn' => [
             'no_price' => 'Nessun prezzo sul listino predefinito: inviato senza prezzo.',
             'no_name' => 'Nome mancante nella lingua base (:locale): usato lo SKU.',
+            'variant_missing_attribute' => 'Variante «:variant»: nessun valore per l\'attributo ":attribute", esclusa da quella combinazione.',
+        ],
+        // Note per-variazione (prodotti variable): finiscono nel campo
+        // "Dettaglio" della riga del padre nell'esito per prodotto.
+        'variant' => [
+            'note' => 'Variante «:variant»: :note',
+            'failed' => 'Variante «:variant» non sincronizzata: :error',
         ],
         // Note sulla riconciliazione della giacenza (modello a delta con
         // last_known_stock su woosync_product_links): finiscono nel campo

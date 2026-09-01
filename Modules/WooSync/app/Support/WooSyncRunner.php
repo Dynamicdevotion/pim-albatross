@@ -2,9 +2,12 @@
 
 namespace Modules\WooSync\Support;
 
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Modules\Localization\Support\Locales;
 use Modules\Products\Models\Product;
+use Modules\Taxonomies\Models\Taxonomy;
 use Modules\WooSync\Contracts\WooCommerceClient;
 use Modules\WooSync\Exceptions\RateLimited;
 use Modules\WooSync\Exceptions\ResourceGone;
@@ -39,6 +42,14 @@ use Throwable;
  * A {@see RateLimited} anywhere in the loop stops the whole run: the store is
  * asking us to back off, so what completed so far is saved and the rest is
  * left to a later run.
+ *
+ * `variable` products are pushed as a WooCommerce variable product: their
+ * variant-defining taxonomies become global attributes ({@see AttributeResolver}),
+ * and each `variant` becomes a Woo *variation* under the parent — never a
+ * product of its own (`variant` is always skipped as a direct sync target,
+ * see {@see syncVariable()}). Known limit of this first pass: a variation's
+ * stock is sent once, on creation, with no delta reconciliation yet — that
+ * only exists for simple products (and the variable/simple parent) today.
  */
 class WooSyncRunner
 {
@@ -59,6 +70,7 @@ class WooSyncRunner
                 ->get();
 
             $resolver = new CategoryResolver($this->client);
+            $attributeResolver = new AttributeResolver($this->client);
             $first = true;
 
             foreach ($products as $product) {
@@ -67,7 +79,7 @@ class WooSyncRunner
                 }
                 $first = false;
 
-                $items[] = $outcome = $this->syncOne($product, $resolver);
+                $items[] = $outcome = $this->syncOne($product, $resolver, $attributeResolver);
                 $counts[$outcome['result']]++;
             }
 
@@ -110,7 +122,7 @@ class WooSyncRunner
     /**
      * @return array{product: string, sku: string, result: string, reason: string|null}
      */
-    private function syncOne(Product $product, CategoryResolver $resolver): array
+    private function syncOne(Product $product, CategoryResolver $resolver, AttributeResolver $attributeResolver): array
     {
         $label = $product->translate(Locales::baseCode())?->name
             ?? $product->sku
@@ -118,14 +130,23 @@ class WooSyncRunner
 
         $base = ['product' => (string) $label, 'sku' => (string) $product->sku];
 
+        // A variant is never pushed on its own — only as part of its
+        // variable parent's own sync (see syncVariable()) — regardless of
+        // its own status, so this is checked before archiving.
+        if ($product->isVariant()) {
+            return $base + ['result' => 'skipped', 'reason' => __('pim.woosync.skip.variant_standalone')];
+        }
+
         if ($product->status === 'archived') {
             return $base + $this->skipArchived($product);
         }
 
-        if (! $product->isSimple()) {
-            return $base + ['result' => 'skipped', 'reason' => __('pim.woosync.skip.not_simple')];
+        if ($product->isVariable()) {
+            return $base + $this->syncVariable($product, $resolver, $attributeResolver);
         }
 
+        // Only `simple` reaches here: `variant` and `variable` are both
+        // handled above.
         if (blank($product->sku)) {
             return $base + ['result' => 'skipped', 'reason' => __('pim.woosync.skip.no_sku')];
         }
@@ -224,6 +245,206 @@ class WooSyncRunner
         } catch (WooSyncException) {
             return ['result' => 'skipped', 'reason' => __('pim.woosync.skip.archived_trash_failed')];
         }
+    }
+
+    /**
+     * A variable product: resolve its variant-defining taxonomies into Woo
+     * attributes, create/update the parent with them, then create/update
+     * every one of its *current* variants as a Woo variation under it. A
+     * variant added since the last sync has no link yet and is created; one
+     * already linked is updated — the same create-vs-update shape the
+     * parent (and simple products) already use, just one level down. No
+     * stock reconciliation for variations yet (known limit of this first
+     * pass) — {@see VariationPayload} sends the PIM value only on creation.
+     *
+     * A failed variation doesn't fail the whole row or stop the others: the
+     * parent's own result stands, with a note per failed/noteworthy
+     * variation appended to `reason`.
+     *
+     * @return array{result: string, reason: string|null}
+     */
+    private function syncVariable(Product $product, CategoryResolver $resolver, AttributeResolver $attributeResolver): array
+    {
+        try {
+            $categoryIds = $resolver->idsFor(...CategoryResolver::categoryTerms($product));
+
+            $taxonomies = AttributeResolver::variantTaxonomies($product);
+            $variants = $product->variants()
+                ->with(['translations', 'prices', 'media', 'taxonomyTerms.translations'])
+                ->get();
+
+            [$attributes, $variantAttributes, $notes] = $this->buildAttributes($taxonomies, $variants, $attributeResolver);
+
+            $payload = VariableProductPayload::for($product);
+            $body = $payload->build($categoryIds, $attributes);
+            $notes = array_merge($notes, $payload->warnings);
+            $imagesHash = $payload->imagesHash();
+
+            $link = WooSyncProductLink::query()->firstOrNew(['product_id' => $product->id]);
+            $hadLinkId = $link->woocommerce_id !== null;
+            $imagesUnchanged = $hadLinkId && $link->images_hash !== null && $link->images_hash === $imagesHash;
+
+            $storeProduct = $this->currentStoreProduct($product, $link);
+
+            [$wooProduct, $result] = $this->createOrUpdate($link, $body, $storeProduct, $imagesUnchanged);
+
+            $link->fill([
+                'woocommerce_id' => $wooProduct['id'] ?? $link->woocommerce_id,
+                'images_hash' => $imagesHash,
+                'last_synced_at' => now(),
+                'last_status' => $result,
+            ])->save();
+
+            $parentWooId = (int) $link->woocommerce_id;
+
+            foreach ($variants as $variant) {
+                $note = $this->syncVariation($variant, $parentWooId, $variantAttributes[$variant->id] ?? []);
+
+                if ($note !== null) {
+                    $notes[] = $note;
+                }
+            }
+
+            return [
+                'result' => $result,
+                'reason' => $notes === [] ? null : implode(' · ', $notes),
+            ];
+        } catch (RateLimited $e) {
+            throw $e;
+        } catch (WooSyncException $e) {
+            return ['result' => 'failed', 'reason' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Resolves each variant-defining taxonomy to a Woo attribute, and each
+     * variant's own term within it — ensuring both exist on the store along
+     * the way. Builds the parent's `attributes` array (all distinct option
+     * labels per attribute) and, per variant id, the `attributes` array to
+     * send for that one variation. A variant missing a term for one of the
+     * axes is left out of that attribute's combination and noted, rather
+     * than guessed at or blocking the rest.
+     *
+     * @param  Collection<int, Taxonomy>  $taxonomies
+     * @param  EloquentCollection<int, Product>  $variants
+     * @return array{
+     *     0: list<array{id: int, variation: bool, options: list<string>}>,
+     *     1: array<int, list<array{id: int, option: string}>>,
+     *     2: list<string>,
+     * }
+     */
+    private function buildAttributes(Collection $taxonomies, EloquentCollection $variants, AttributeResolver $attributeResolver): array
+    {
+        $parentAttributes = [];
+        $variantAttributes = [];
+        $notes = [];
+
+        foreach ($taxonomies as $taxonomy) {
+            $attributeId = $attributeResolver->attributeIdFor($taxonomy);
+            $options = [];
+
+            foreach ($variants as $variant) {
+                $term = $variant->taxonomyTerms->firstWhere('taxonomy_id', $taxonomy->id);
+
+                if ($term === null) {
+                    $notes[] = __('pim.woosync.warn.variant_missing_attribute', [
+                        'variant' => $variant->sku,
+                        'attribute' => $taxonomy->name,
+                    ]);
+
+                    continue;
+                }
+
+                $attributeResolver->termIdFor($term, $attributeId);
+                $label = $term->name ?? $term->slug;
+
+                $options[] = $label;
+                $variantAttributes[$variant->id][] = ['id' => $attributeId, 'option' => $label];
+            }
+
+            $parentAttributes[] = [
+                'id' => $attributeId,
+                'variation' => true,
+                'options' => array_values(array_unique($options)),
+            ];
+        }
+
+        return [$parentAttributes, $variantAttributes, $notes];
+    }
+
+    /**
+     * Create/update one variant as a Woo variation under its already-synced
+     * parent. Returns a human note for the report — a failure, or a
+     * carried-over warning (e.g. missing price) — or null when there is
+     * nothing to add beyond the parent row's own outcome.
+     */
+    private function syncVariation(Product $variant, int $parentWooId, array $attributes): ?string
+    {
+        try {
+            $link = WooSyncProductLink::query()->firstOrNew(['product_id' => $variant->id]);
+            $hadLinkId = $link->woocommerce_id !== null;
+
+            $payload = VariationPayload::for($variant);
+            $imagesHash = $payload->imagesHash();
+            $imagesUnchanged = $hadLinkId && $link->images_hash !== null && $link->images_hash === $imagesHash;
+
+            [$wooVariation, $result] = $this->createOrUpdateVariation(
+                $link,
+                $parentWooId,
+                $payload,
+                $attributes,
+                $hadLinkId,
+                $imagesUnchanged,
+            );
+
+            $link->fill([
+                'woocommerce_id' => $wooVariation['id'] ?? $link->woocommerce_id,
+                'images_hash' => $imagesHash,
+                'last_synced_at' => now(),
+                'last_status' => $result,
+            ])->save();
+
+            return $payload->warnings === []
+                ? null
+                : __('pim.woosync.variant.note', [
+                    'variant' => $variant->sku,
+                    'note' => implode(' · ', $payload->warnings),
+                ]);
+        } catch (RateLimited $e) {
+            throw $e;
+        } catch (WooSyncException $e) {
+            return __('pim.woosync.variant.failed', ['variant' => $variant->sku, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * @param  list<array{id: int, option: string}>  $attributes
+     * @return array{0: array<string, mixed>, 1: string} [woo variation, 'created'|'updated']
+     */
+    private function createOrUpdateVariation(
+        WooSyncProductLink $link,
+        int $parentWooId,
+        VariationPayload $payload,
+        array $attributes,
+        bool $hadLinkId,
+        bool $imagesUnchanged,
+    ): array {
+        if ($hadLinkId) {
+            $body = $payload->build($attributes, includeStock: false);
+            $updateBody = $imagesUnchanged ? Arr::except($body, ['image']) : $body;
+
+            try {
+                return [$this->client->updateVariation($parentWooId, (int) $link->woocommerce_id, $updateBody), 'updated'];
+            } catch (ResourceGone) {
+                // Raced with a deletion between our read and our write, or
+                // the variation was removed directly on the store — drop the
+                // stale id/baseline and recreate.
+                $link->woocommerce_id = null;
+                $link->images_hash = null;
+            }
+        }
+
+        return [$this->client->createVariation($parentWooId, $payload->build($attributes, includeStock: true)), 'created'];
     }
 
     /**

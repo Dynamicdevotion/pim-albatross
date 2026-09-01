@@ -74,6 +74,12 @@ class ProductPayload
     /** @return array<string, mixed> */
     private function priceFields(): array
     {
+        // A variable product never carries its own price — its variants do —
+        // so there is nothing missing to warn about here.
+        if ($this->product->isVariable()) {
+            return [];
+        }
+
         $list = PriceList::default();
 
         $price = $list !== null
