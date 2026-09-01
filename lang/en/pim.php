@@ -522,6 +522,7 @@ return [
         'notify' => [
             'queued' => 'Sync queued: it will be processed shortly.',
             'done' => 'Sync finished: :created created, :updated updated, :skipped skipped, :failed failed.',
+            'delete_failed' => 'Product ":product" deleted from the PIM, but deleting it on WooCommerce failed: manual action needed.',
         ],
         'notification' => [
             'saved' => 'WooCommerce settings saved.',
@@ -570,6 +571,9 @@ return [
         'skip' => [
             'not_simple' => 'Skipped: only simple products can be synced in this version.',
             'no_sku' => 'Skipped: missing SKU.',
+            'archived' => 'Skipped: archived product, not synced.',
+            'archived_trashed' => 'Skipped: archived product — moved to trash on WooCommerce.',
+            'archived_trash_failed' => 'Skipped: archived product — could not move it to trash on WooCommerce (still live there).',
         ],
         'warn' => [
             'no_price' => 'No price on the default price list: sent without a price.',
