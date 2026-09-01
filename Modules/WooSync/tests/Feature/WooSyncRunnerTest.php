@@ -3,12 +3,15 @@
 namespace Modules\WooSync\Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Modules\Localization\Database\Seeders\LanguageSeeder;
 use Modules\Pricing\Models\PriceList;
 use Modules\Products\Models\Product;
 use Modules\WooSync\Exceptions\WooSyncException;
 use Modules\WooSync\Models\WooSyncProductLink;
 use Modules\WooSync\Models\WooSyncRun;
+use Modules\WooSync\Support\ProductPayload;
 use Modules\WooSync\Support\WooSyncRunner;
 use Modules\WooSync\Tests\Support\FakeWooClient;
 use Tests\TestCase;
@@ -24,6 +27,7 @@ class WooSyncRunnerTest extends TestCase
         $this->seed(LanguageSeeder::class);
         PriceList::create(['name' => 'Standard', 'is_default' => true]);
         config(['woosync.request_delay_ms' => 0]);
+        Storage::fake('public');
     }
 
     private function simple(string $sku, int $stock = 0): Product
@@ -261,7 +265,7 @@ class WooSyncRunnerTest extends TestCase
         $this->assertSame([], $client->calls);
     }
 
-    public function test_an_archived_product_with_a_previous_link_is_set_to_draft_on_woo(): void
+    public function test_an_archived_product_with_a_previous_link_is_trashed_on_woo(): void
     {
         $product = $this->simple('ARCH-2');
         $product->forceFill(['status' => 'archived'])->saveQuietly();
@@ -273,30 +277,108 @@ class WooSyncRunnerTest extends TestCase
 
         $this->assertSame(1, $run->skipped_count);
         $this->assertSame('skipped', $run->items[0]['result']);
-        $this->assertSame(__('pim.woosync.skip.archived_drafted'), $run->items[0]['reason']);
-        $this->assertSame('draft', $client->updatePayloads[700]['status']);
-        $this->assertContains('updateProduct:700', $client->calls);
+        $this->assertSame(__('pim.woosync.skip.archived_trashed'), $run->items[0]['reason']);
+        $this->assertContains('deleteProduct:700:trash', $client->calls);
+        $this->assertNotContains('updateProduct:700', $client->calls);
         $this->assertNotContains('createProduct', $client->calls);
+        // The link is left in place, ready for a later sync to find it again.
+        $this->assertSame(700, WooSyncProductLink::firstWhere('product_id', $product->id)->woocommerce_id);
     }
 
-    public function test_an_archived_product_whose_woo_draft_update_fails_still_reports_skipped(): void
+    public function test_an_archived_product_whose_woo_trash_call_fails_still_reports_skipped(): void
     {
         $product = $this->simple('ARCH-3');
         $product->forceFill(['status' => 'archived'])->saveQuietly();
         WooSyncProductLink::create(['product_id' => $product->id, 'woocommerce_id' => 701]);
 
         $client = new FakeWooClient;
-        $client->onUpdateProduct = function (): array {
+        $client->onDeleteProduct = function (): void {
             throw WooSyncException::unreachable('timeout');
         };
 
         (new WooSyncRunner($client))->run($run = $this->makeRun([$product->id]));
         $run->refresh();
 
-        $this->assertSame('completed', $run->status, 'a failed draft-push does not fail the whole run');
+        $this->assertSame('completed', $run->status, 'a failed trash-push does not fail the whole run');
         $this->assertSame(1, $run->skipped_count);
         $this->assertSame('skipped', $run->items[0]['result']);
-        $this->assertSame(__('pim.woosync.skip.archived_draft_failed'), $run->items[0]['reason']);
+        $this->assertSame(__('pim.woosync.skip.archived_trash_failed'), $run->items[0]['reason']);
+    }
+
+    public function test_a_product_reactivated_after_being_archived_and_trashed_is_republished_not_recreated(): void
+    {
+        $product = $this->simple('ARCH-4');
+        WooSyncProductLink::create(['product_id' => $product->id, 'woocommerce_id' => 702]);
+        $client = new FakeWooClient;
+        // Still resolvable by id even in the store's trash — WooCommerce
+        // doesn't 404 a GET for a trashed product.
+        $client->productsById[702] = ['id' => 702, 'status' => 'trash', 'manage_stock' => true, 'stock_quantity' => 5];
+
+        $product->forceFill(['status' => 'active'])->saveQuietly();
+        (new WooSyncRunner($client))->run($run = $this->makeRun([$product->id]));
+        $run->refresh();
+
+        $this->assertSame(1, $run->updated_count);
+        $this->assertSame('publish', $client->updatePayloads[702]['status']);
+        $this->assertNotContains('createProduct', $client->calls);
+        $this->assertSame(702, WooSyncProductLink::firstWhere('product_id', $product->id)->woocommerce_id);
+    }
+
+    public function test_a_second_sync_with_unchanged_images_omits_them_from_the_update(): void
+    {
+        $product = $this->simple('IMG-1');
+        $product->addMedia(UploadedFile::fake()->image('main.jpg'))->toMediaCollection('main_image');
+        $client = new FakeWooClient;
+
+        // First sync: creates, so images are sent and the hash is recorded.
+        (new WooSyncRunner($client))->run($this->makeRun([$product->id]));
+        $this->assertArrayHasKey('images', $client->createPayloads[0]);
+        $link = WooSyncProductLink::firstWhere('product_id', $product->id);
+        $this->assertNotNull($link->images_hash);
+
+        // Second sync: nothing about the images changed.
+        (new WooSyncRunner($client))->run($this->makeRun([$product->id]));
+
+        $this->assertArrayNotHasKey('images', $client->updatePayloads[$link->woocommerce_id]);
+    }
+
+    public function test_adding_an_image_resends_it_on_the_next_sync(): void
+    {
+        $product = $this->simple('IMG-2');
+        $product->addMedia(UploadedFile::fake()->image('main.jpg'))->toMediaCollection('main_image');
+        $client = new FakeWooClient;
+
+        (new WooSyncRunner($client))->run($this->makeRun([$product->id]));
+        $link = WooSyncProductLink::firstWhere('product_id', $product->id);
+        $previousHash = $link->images_hash;
+
+        $product->addMedia(UploadedFile::fake()->image('extra.jpg'))->toMediaCollection('gallery');
+        (new WooSyncRunner($client))->run($this->makeRun([$product->id]));
+
+        $this->assertArrayHasKey('images', $client->updatePayloads[$link->woocommerce_id]);
+        $this->assertCount(2, $client->updatePayloads[$link->woocommerce_id]['images']);
+        $this->assertNotSame($previousHash, $link->fresh()->images_hash);
+    }
+
+    public function test_a_recreated_product_resends_images_even_if_the_stored_hash_still_matches(): void
+    {
+        $product = $this->simple('IMG-3');
+        $product->addMedia(UploadedFile::fake()->image('main.jpg'))->toMediaCollection('main_image');
+        $link = WooSyncProductLink::create([
+            'product_id' => $product->id,
+            'woocommerce_id' => 800,
+            'images_hash' => ProductPayload::for($product->fresh())->imagesHash(),
+        ]);
+
+        $client = new FakeWooClient;
+        $client->onGetProduct = function (int $id): array {
+            throw WooSyncException::gone('deleted');
+        };
+
+        (new WooSyncRunner($client))->run($this->makeRun([$product->id]));
+
+        $this->assertContains('createProduct', $client->calls);
+        $this->assertArrayHasKey('images', $client->createPayloads[0]);
     }
 
     public function test_a_missing_default_price_still_creates_the_product_but_is_noted(): void

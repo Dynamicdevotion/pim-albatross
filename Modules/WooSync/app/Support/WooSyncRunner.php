@@ -2,6 +2,7 @@
 
 namespace Modules\WooSync\Support;
 
+use Illuminate\Support\Arr;
 use Modules\Localization\Support\Locales;
 use Modules\Products\Models\Product;
 use Modules\WooSync\Contracts\WooCommerceClient;
@@ -135,9 +136,17 @@ class WooSyncRunner
             $payload = ProductPayload::for($product);
             $body = $payload->build($categoryIds);
             $notes = $payload->warnings;
+            $imagesHash = $payload->imagesHash();
 
             $link = WooSyncProductLink::query()->firstOrNew(['product_id' => $product->id]);
             $hadLinkId = $link->woocommerce_id !== null;
+
+            // Nothing changed since the images we last pushed: dropped from
+            // the update body below so WooCommerce doesn't re-import each
+            // `src` as a fresh media attachment. Never applies to a create
+            // (including the recreate-after-404 fallback in createOrUpdate())
+            // — a store object that doesn't exist yet has no images to skip.
+            $imagesUnchanged = $hadLinkId && $link->images_hash !== null && $link->images_hash === $imagesHash;
 
             // Resolve the current store product first, so stock can be
             // reconciled against it before we write. A linked id that 404s is
@@ -152,7 +161,12 @@ class WooSyncRunner
                 $notes[] = $stockNote;
             }
 
-            [$wooProduct, $result] = $this->createOrUpdate($link, array_merge($body, $stockFields), $storeProduct);
+            [$wooProduct, $result] = $this->createOrUpdate(
+                $link,
+                array_merge($body, $stockFields),
+                $storeProduct,
+                $imagesUnchanged,
+            );
 
             if ($pimStock !== null && (int) ($product->stock ?? 0) !== $pimStock) {
                 $product->forceFill(['stock' => $pimStock])->saveQuietly();
@@ -160,7 +174,7 @@ class WooSyncRunner
 
             $link->fill([
                 'woocommerce_id' => $wooProduct['id'] ?? $link->woocommerce_id,
-                'images_hash' => $payload->imagesHash(),
+                'images_hash' => $imagesHash,
                 'last_synced_at' => now(),
                 'last_status' => $result,
                 'last_known_stock' => $nextLastKnown,
@@ -179,11 +193,17 @@ class WooSyncRunner
 
     /**
      * An archived product is never created or updated on the store. If it was
-     * already synced before being archived, it is still `publish` on
-     * WooCommerce — send a status-only update to `draft` so the two sides
-     * don't stay silently out of sync. A failure here doesn't fail the run:
-     * it's still reported as `skipped`, just with a note that the store side
-     * couldn't be aligned.
+     * already synced before being archived, it is still live on WooCommerce —
+     * move it to the trash there (not a permanent delete) so the two sides
+     * don't stay silently out of sync. The link is left untouched: if the
+     * product comes back to `active` later, the normal update path in
+     * {@see syncOne()} finds it again via `getProduct()` (WooCommerce still
+     * serves a trashed product by id) and republishes it with a plain status
+     * update — WooCommerce also reserves the SKU for trashed products, so
+     * treating this as a fresh create would likely fail on a duplicate SKU.
+     *
+     * A failure here doesn't fail the run: it's still reported as `skipped`,
+     * just with a note that the store side couldn't be aligned.
      *
      * @return array{result: string, reason: string}
      */
@@ -196,20 +216,21 @@ class WooSyncRunner
         }
 
         try {
-            $this->client->updateProduct((int) $link->woocommerce_id, ['status' => 'draft']);
+            $this->client->deleteProduct((int) $link->woocommerce_id, force: false);
 
-            return ['result' => 'skipped', 'reason' => __('pim.woosync.skip.archived_drafted')];
+            return ['result' => 'skipped', 'reason' => __('pim.woosync.skip.archived_trashed')];
         } catch (RateLimited $e) {
             throw $e;
         } catch (WooSyncException) {
-            return ['result' => 'skipped', 'reason' => __('pim.woosync.skip.archived_draft_failed')];
+            return ['result' => 'skipped', 'reason' => __('pim.woosync.skip.archived_trash_failed')];
         }
     }
 
     /**
      * The store product this PIM product currently maps to, or null if there is
      * none yet. A linked `woocommerce_id` that the store reports as gone (404)
-     * is cleared, along with the stale stock baseline, so the caller recreates.
+     * is cleared, along with the stale stock and images baselines, so the
+     * caller recreates.
      *
      * @return array<string, mixed>|null
      */
@@ -221,6 +242,7 @@ class WooSyncRunner
             } catch (ResourceGone) {
                 $link->woocommerce_id = null;
                 $link->last_known_stock = null;
+                $link->images_hash = null;
 
                 return null;
             }
@@ -309,18 +331,24 @@ class WooSyncRunner
     /**
      * @param  array<string, mixed>  $body
      * @param  array<string, mixed>|null  $storeProduct  already-resolved counterpart, if any
+     * @param  bool  $imagesUnchanged  drop `images` from the *update* call only — a
+     *                                 create (including the fallback below) always gets the full body, since
+     *                                 a store object that doesn't exist yet has nothing to skip
      * @return array{0: array<string, mixed>, 1: string} [woo product, 'created'|'updated']
      */
-    private function createOrUpdate(WooSyncProductLink $link, array $body, ?array $storeProduct): array
+    private function createOrUpdate(WooSyncProductLink $link, array $body, ?array $storeProduct, bool $imagesUnchanged): array
     {
         if ($storeProduct !== null && isset($storeProduct['id'])) {
+            $updateBody = $imagesUnchanged ? Arr::except($body, ['images']) : $body;
+
             try {
-                return [$this->client->updateProduct((int) $storeProduct['id'], $body), 'updated'];
+                return [$this->client->updateProduct((int) $storeProduct['id'], $updateBody), 'updated'];
             } catch (ResourceGone) {
                 // Raced with a deletion between our read and our write — drop
-                // the stale id and baseline and recreate.
+                // the stale id and baselines and recreate.
                 $link->woocommerce_id = null;
                 $link->last_known_stock = null;
+                $link->images_hash = null;
             }
         }
 

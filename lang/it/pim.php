@@ -572,8 +572,8 @@ return [
             'not_simple' => 'Saltato: in questa versione sono sincronizzabili solo i prodotti semplici.',
             'no_sku' => 'Saltato: SKU mancante.',
             'archived' => 'Saltato: prodotto archiviato, non sincronizzato.',
-            'archived_drafted' => 'Saltato: prodotto archiviato — impostato in bozza su WooCommerce.',
-            'archived_draft_failed' => 'Saltato: prodotto archiviato — impossibile aggiornare lo stato su WooCommerce (resta pubblicato).',
+            'archived_trashed' => 'Saltato: prodotto archiviato — spostato nel cestino su WooCommerce.',
+            'archived_trash_failed' => 'Saltato: prodotto archiviato — impossibile spostarlo nel cestino su WooCommerce (resta pubblicato).',
         ],
         'warn' => [
             'no_price' => 'Nessun prezzo sul listino predefinito: inviato senza prezzo.',
