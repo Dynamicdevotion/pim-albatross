@@ -49,6 +49,10 @@ class ProductPayload
             'name' => $translation?->name ?? (string) $this->product->sku,
             'type' => 'simple',
             'sku' => (string) $this->product->sku,
+            // 'archived' products never reach here (WooSyncRunner skips them
+            // before building a payload), so this only ever distinguishes
+            // 'active' from 'draft'.
+            'status' => $this->product->status === 'active' ? 'publish' : 'draft',
             'description' => (string) ($translation?->description ?? ''),
         ];
 

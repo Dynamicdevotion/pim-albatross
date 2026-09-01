@@ -246,6 +246,59 @@ class WooSyncRunnerTest extends TestCase
         $this->assertNotContains('createProduct', $client->calls);
     }
 
+    public function test_an_archived_product_never_synced_before_is_skipped_with_no_woo_call(): void
+    {
+        $product = $this->simple('ARCH-1');
+        $product->forceFill(['status' => 'archived'])->saveQuietly();
+
+        $client = new FakeWooClient;
+        (new WooSyncRunner($client))->run($run = $this->makeRun([$product->id]));
+        $run->refresh();
+
+        $this->assertSame(1, $run->skipped_count);
+        $this->assertSame('skipped', $run->items[0]['result']);
+        $this->assertSame(__('pim.woosync.skip.archived'), $run->items[0]['reason']);
+        $this->assertSame([], $client->calls);
+    }
+
+    public function test_an_archived_product_with_a_previous_link_is_set_to_draft_on_woo(): void
+    {
+        $product = $this->simple('ARCH-2');
+        $product->forceFill(['status' => 'archived'])->saveQuietly();
+        WooSyncProductLink::create(['product_id' => $product->id, 'woocommerce_id' => 700]);
+
+        $client = new FakeWooClient;
+        (new WooSyncRunner($client))->run($run = $this->makeRun([$product->id]));
+        $run->refresh();
+
+        $this->assertSame(1, $run->skipped_count);
+        $this->assertSame('skipped', $run->items[0]['result']);
+        $this->assertSame(__('pim.woosync.skip.archived_drafted'), $run->items[0]['reason']);
+        $this->assertSame('draft', $client->updatePayloads[700]['status']);
+        $this->assertContains('updateProduct:700', $client->calls);
+        $this->assertNotContains('createProduct', $client->calls);
+    }
+
+    public function test_an_archived_product_whose_woo_draft_update_fails_still_reports_skipped(): void
+    {
+        $product = $this->simple('ARCH-3');
+        $product->forceFill(['status' => 'archived'])->saveQuietly();
+        WooSyncProductLink::create(['product_id' => $product->id, 'woocommerce_id' => 701]);
+
+        $client = new FakeWooClient;
+        $client->onUpdateProduct = function (): array {
+            throw WooSyncException::unreachable('timeout');
+        };
+
+        (new WooSyncRunner($client))->run($run = $this->makeRun([$product->id]));
+        $run->refresh();
+
+        $this->assertSame('completed', $run->status, 'a failed draft-push does not fail the whole run');
+        $this->assertSame(1, $run->skipped_count);
+        $this->assertSame('skipped', $run->items[0]['result']);
+        $this->assertSame(__('pim.woosync.skip.archived_draft_failed'), $run->items[0]['reason']);
+    }
+
     public function test_a_missing_default_price_still_creates_the_product_but_is_noted(): void
     {
         PriceList::query()->delete();

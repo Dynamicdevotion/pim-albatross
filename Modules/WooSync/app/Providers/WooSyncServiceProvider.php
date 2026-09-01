@@ -2,11 +2,13 @@
 
 namespace Modules\WooSync\Providers;
 
+use Modules\Products\Models\Product;
 use Modules\Products\Support\ProductRowActions;
 use Modules\WooSync\Contracts\WooCommerceClient;
 use Modules\WooSync\Filament\Actions\SyncProductsAction;
 use Modules\WooSync\Models\WooSyncSetting;
 use Modules\WooSync\Support\Http\BasicAuthWooClient;
+use Modules\WooSync\Support\ProductDeletionSync;
 use Modules\WooSync\Support\WooSync;
 use Nwidart\Modules\Support\ModuleServiceProvider;
 
@@ -53,6 +55,7 @@ class WooSyncServiceProvider extends ModuleServiceProvider
         WooSync::defineFeature();
 
         static::registerProductActions();
+        static::registerDeletionPropagation();
     }
 
     /**
@@ -71,5 +74,27 @@ class WooSyncServiceProvider extends ModuleServiceProvider
 
         ProductRowActions::registerRecord(static fn () => SyncProductsAction::record());
         ProductRowActions::registerBulk(static fn () => SyncProductsAction::bulk());
+    }
+
+    /**
+     * Hook {@see ProductDeletionSync} onto `Product::deleting`, the same
+     * Eloquent event `Modules\Products\Models\Product::booted()` already uses
+     * internally for variant media cleanup — but registered from this side,
+     * so `Modules\Products` still never references WooSync. Runs on every
+     * delete, single or bulk (Filament's bulk delete calls `delete()` per
+     * record, firing the event each time), and never blocks the deletion
+     * itself.
+     *
+     * Public + static so the feature-flag test can exercise it directly.
+     */
+    public static function registerDeletionPropagation(): void
+    {
+        if (! WooSync::enabled()) {
+            return;
+        }
+
+        Product::deleting(static function (Product $product): void {
+            app(ProductDeletionSync::class)->handle($product);
+        });
     }
 }
