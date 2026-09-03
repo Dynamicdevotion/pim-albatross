@@ -51,6 +51,41 @@ php artisan serve
 
 The admin panel is served at **`/admin`** (login at `/admin/login`).
 
+### Git hooks
+
+`composer install` (any run — it is wired into `post-autoload-dump`) installs
+this project's `pre-commit` hook into `.git/hooks/` automatically, via
+`scripts/install-git-hooks.php`. No manual step needed, on this clone or any
+future one.
+
+What it does: this project vendors third-party JS/CSS and publishes it with
+`php artisan filament:assets` into committed `public/` files (see
+*Deployment*) rather than an npm build — a step that is easy to forget after
+editing a source under `Modules/*/resources/{js,css}/**`, and has caused a
+live 500 more than once when the published copy fell out of sync with its
+source. When a commit's staged changes touch one of those sources, the hook:
+
+1. runs `php artisan filament:assets` for you;
+2. stages whatever it regenerated under `public/` — never a blanket `git add
+   public/`, only the files that actually changed as a result of that command,
+   so any other unrelated `public/` changes you haven't staged are left alone;
+3. **blocks the commit** if the command itself fails, instead of letting a
+   stale/inconsistent `public/` through.
+
+It is a no-op (adds no delay) for a commit that doesn't touch a vendored
+JS/CSS source. To reinstall it by hand (e.g. after editing
+`scripts/git-hooks/pre-commit`) run:
+
+```bash
+php scripts/install-git-hooks.php
+```
+
+It won't overwrite a `.git/hooks/pre-commit` that isn't its own (no matching
+marker comment) — if you already have a custom one, install-git-hooks.php
+leaves it alone and prints a warning instead. `git commit --no-verify` skips
+the hook entirely; avoid it for a commit touching `Modules/*/resources/js`
+or `css`.
+
 ### Note: `.env.example` ships production defaults
 
 To avoid a debug-exposing first deploy, `.env.example` sets:
@@ -1140,7 +1175,9 @@ without it the new pages/resources get no route and no menu entry. See
   `Modules/Pricing/resources/js/vendor/`, are registered with `FilamentAsset`
   in `PricingPanelPlugin`, and `php artisan filament:assets` publishes them to
   `public/js/pricing` + `public/css/pricing` (committed). Re-run
-  `php artisan filament:assets` after changing a vendored file.
+  `php artisan filament:assets` after changing a vendored file — the
+  *Git hooks* pre-commit hook (see *Local setup*) does this automatically for
+  a staged change under `Modules/*/resources/{js,css}/**`.
 - **HTTPS is enforced**: `public/.htaccess` 301-redirects plain HTTP to HTTPS
   (guarded on `%{HTTPS}` and `X-Forwarded-Proto` so it is loop-safe), and
   `AppServiceProvider` calls `URL::forceScheme('https')` in production.
