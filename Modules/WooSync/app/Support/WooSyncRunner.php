@@ -70,7 +70,10 @@ class WooSyncRunner
         try {
             $products = Product::query()
                 ->whereIn('id', $run->product_ids ?? [])
-                ->with(['translations', 'prices', 'media', 'taxonomyTerms.translations'])
+                ->with([
+                    'translations', 'prices', 'media', 'taxonomyTerms.translations',
+                    'upsells.translations', 'crossSells.translations',
+                ])
                 ->get();
 
             $resolver = new CategoryResolver($this->client);
@@ -157,10 +160,12 @@ class WooSyncRunner
 
         try {
             $categoryIds = $resolver->idsFor(...CategoryResolver::categoryTerms($product));
+            [$upsellIds, $upsellNotes] = RelatedProductResolver::resolve($product->upsells, 'up-sell');
+            [$crossSellIds, $crossSellNotes] = RelatedProductResolver::resolve($product->crossSells, 'cross-sell');
 
             $payload = ProductPayload::for($product);
-            $body = $payload->build($categoryIds);
-            $notes = $payload->warnings;
+            $body = $payload->build($categoryIds, $upsellIds, $crossSellIds);
+            $notes = array_merge($payload->warnings, $upsellNotes, $crossSellNotes);
             $imagesHash = $payload->imagesHash();
 
             $link = WooSyncProductLink::query()->firstOrNew(['product_id' => $product->id]);
@@ -275,6 +280,8 @@ class WooSyncRunner
     {
         try {
             $categoryIds = $resolver->idsFor(...CategoryResolver::categoryTerms($product));
+            [$upsellIds, $upsellNotes] = RelatedProductResolver::resolve($product->upsells, 'up-sell');
+            [$crossSellIds, $crossSellNotes] = RelatedProductResolver::resolve($product->crossSells, 'cross-sell');
 
             $taxonomies = AttributeResolver::variantTaxonomies($product);
             $variants = $product->variants()
@@ -286,8 +293,8 @@ class WooSyncRunner
             [$attributes, $variantAttributes, $notes] = $this->buildAttributes($taxonomies, $active, $attributeResolver);
 
             $payload = VariableProductPayload::for($product);
-            $body = $payload->build($categoryIds, $attributes);
-            $notes = array_merge($notes, $payload->warnings);
+            $body = $payload->build($categoryIds, $attributes, $upsellIds, $crossSellIds);
+            $notes = array_merge($notes, $payload->warnings, $upsellNotes, $crossSellNotes);
             $imagesHash = $payload->imagesHash();
 
             $link = WooSyncProductLink::query()->firstOrNew(['product_id' => $product->id]);

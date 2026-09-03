@@ -54,6 +54,8 @@ return [
         'price_max' => 'Prezzo max',
         'terms' => 'Termini',
         'taxonomy_terms' => 'Termini di tassonomia',
+        'upsells' => 'Prodotti correlati (up-sell)',
+        'cross_sells' => 'Prodotti complementari (cross-sell)',
         'translations' => 'Traduzioni',
         'source_list' => 'Listino di origine',
         'adjustment_percent' => 'Variazione %',
@@ -127,6 +129,7 @@ return [
         'shipping' => 'Spedizione',
         'media' => 'Immagini',
         'seo' => 'SEO',
+        'related_products' => 'Prodotti correlati',
     ],
 
     'helper' => [
@@ -587,6 +590,7 @@ return [
             'no_price' => 'Nessun prezzo sul listino predefinito: inviato senza prezzo.',
             'no_name' => 'Nome mancante nella lingua base (:locale): usato lo SKU.',
             'variant_missing_attribute' => 'Variante «:variant»: nessun valore per l\'attributo ":attribute", esclusa da quella combinazione.',
+            'related_not_synced' => 'Prodotto correlato «:product» non ancora sincronizzato, escluso da :type.',
         ],
         // Note per-variazione (prodotti variable): finiscono nel campo
         // "Dettaglio" della riga del padre nell'esito per prodotto.

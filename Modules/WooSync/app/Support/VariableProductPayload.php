@@ -34,11 +34,13 @@ class VariableProductPayload
     /**
      * @param  list<int>  $categoryIds
      * @param  list<array{id: int, variation: bool, options: list<string>}>  $attributes
+     * @param  list<int>  $upsellIds
+     * @param  list<int>  $crossSellIds
      * @return array<string, mixed>
      */
-    public function build(array $categoryIds, array $attributes): array
+    public function build(array $categoryIds, array $attributes, array $upsellIds = [], array $crossSellIds = []): array
     {
-        $body = $this->base->build($categoryIds);
+        $body = $this->base->build($categoryIds, $upsellIds, $crossSellIds);
         $this->warnings = $this->base->warnings;
 
         $body['type'] = 'variable';

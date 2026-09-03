@@ -10,8 +10,10 @@ use Modules\Products\Models\Product;
  * Builds the WooCommerce product payload for one PIM product and records what,
  * if anything, had to be left out. The v1 field set is fixed: sku, name and
  * description (base language), regular_price (from the default price list),
- * weight and dimensions, images (main image then gallery, by public URL), and
- * categories (resolved separately by {@see CategoryResolver} and passed in).
+ * weight and dimensions, images (main image then gallery, by public URL),
+ * categories (resolved separately by {@see CategoryResolver} and passed in),
+ * and upsell_ids/cross_sell_ids (resolved separately by
+ * {@see RelatedProductResolver} and passed in, same shape as categories).
  *
  * Only `simple` products are pushable; `variable` / `variant` rows are the
  * runner's concern (skipped with a reason) and never reach here.
@@ -30,9 +32,11 @@ class ProductPayload
 
     /**
      * @param  list<int>  $categoryIds  already-resolved Woo category ids
+     * @param  list<int>  $upsellIds  already-resolved Woo product ids
+     * @param  list<int>  $crossSellIds  already-resolved Woo product ids
      * @return array<string, mixed>
      */
-    public function build(array $categoryIds = []): array
+    public function build(array $categoryIds = [], array $upsellIds = [], array $crossSellIds = []): array
     {
         $translation = $this->product->translate(Locales::baseCode());
 
@@ -66,6 +70,14 @@ class ProductPayload
 
         if ($categoryIds !== []) {
             $payload['categories'] = array_map(static fn (int $id): array => ['id' => $id], $categoryIds);
+        }
+
+        if ($upsellIds !== []) {
+            $payload['upsell_ids'] = $upsellIds;
+        }
+
+        if ($crossSellIds !== []) {
+            $payload['cross_sell_ids'] = $crossSellIds;
         }
 
         return $payload;

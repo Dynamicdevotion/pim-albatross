@@ -20,6 +20,7 @@ use Modules\Localization\Support\Locales;
 use Modules\Products\Enums\ProductType;
 use Modules\Products\Models\Product;
 use Modules\Products\Support\ExistingImagePicker;
+use Modules\Products\Support\RelatedProductPicker;
 use Modules\Taxonomies\Models\TaxonomyTerm;
 
 class ProductForm
@@ -157,6 +158,16 @@ class ProductForm
                     ->searchable()
                     ->getOptionLabelFromRecordUsing(fn (TaxonomyTerm $record): string => "{$record->taxonomy->name}: {$record->name}")
                     ->columnSpanFull(),
+
+                // --- Related products ---
+                Section::make(__('pim.section.related_products'))
+                    ->columns(2)
+                    ->columnSpanFull()
+                    ->schema([
+                        RelatedProductPicker::make('upsell_ids', __('pim.field.upsells')),
+                        RelatedProductPicker::make('cross_sell_ids', __('pim.field.cross_sells')),
+                    ]),
+
                 ProductPricesTable::make()
                     ->visible(fn (Get $get): bool => $get('type') !== ProductType::Variable->value)
                     ->columnSpanFull(),

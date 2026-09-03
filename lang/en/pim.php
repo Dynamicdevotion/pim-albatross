@@ -54,6 +54,8 @@ return [
         'price_max' => 'Max price',
         'terms' => 'Terms',
         'taxonomy_terms' => 'Taxonomy terms',
+        'upsells' => 'Related products (up-sell)',
+        'cross_sells' => 'Complementary products (cross-sell)',
         'translations' => 'Translations',
         'source_list' => 'Source list',
         'adjustment_percent' => 'Adjustment %',
@@ -127,6 +129,7 @@ return [
         'shipping' => 'Shipping',
         'media' => 'Images',
         'seo' => 'SEO',
+        'related_products' => 'Related products',
     ],
 
     'helper' => [
@@ -587,6 +590,7 @@ return [
             'no_price' => 'No price on the default price list: sent without a price.',
             'no_name' => 'Missing name in the base language (:locale): used the SKU.',
             'variant_missing_attribute' => 'Variant ":variant": no value for attribute ":attribute", left out of that combination.',
+            'related_not_synced' => 'Related product ":product" not synced yet, left out of :type.',
         ],
         // Per-variation notes (variable products): land in the "Detail"
         // field of the parent's row in the per-product outcome.

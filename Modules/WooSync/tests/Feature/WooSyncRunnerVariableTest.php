@@ -439,4 +439,18 @@ class WooSyncRunnerVariableTest extends TestCase
         $this->assertSame('failed', $run->status);
         $this->assertNotNull($run->error_message);
     }
+
+    public function test_a_variable_parent_resolves_its_own_upsells_and_cross_sells(): void
+    {
+        $upsell = $this->variableWithVariants('VARB-UP', count: 1);
+        WooSyncProductLink::create(['product_id' => $upsell->id, 'woocommerce_id' => 777]);
+
+        $parent = $this->variableWithVariants('VARB-REL', count: 1);
+        $parent->upsells()->sync([$upsell->id]);
+
+        $client = new FakeWooClient;
+        (new WooSyncRunner($client))->run($this->makeRun([$parent->id]));
+
+        $this->assertSame([777], $client->createPayloads[0]['upsell_ids']);
+    }
 }
