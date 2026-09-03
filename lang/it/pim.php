@@ -379,6 +379,7 @@ return [
         ],
         'notify' => [
             'queued' => 'Export avviato: il catalogo è grande, l\'elaborazione prosegue in coda. Puoi seguire l\'avanzamento in questa pagina.',
+            'failed' => 'Export non riuscito. Consulta il dettaglio nella pagina Esiti export.',
         ],
         'status' => [
             'pending' => 'In coda',
