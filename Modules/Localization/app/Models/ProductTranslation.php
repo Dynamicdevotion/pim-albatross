@@ -25,6 +25,7 @@ class ProductTranslation extends Model
         'language_id',
         'locale',
         'name',
+        'slug',
         'description',
         'meta_title',
         'meta_description',

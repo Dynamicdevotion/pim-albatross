@@ -2,6 +2,7 @@
 
 namespace Modules\Products\Filament\Resources\Products\RelationManagers;
 
+use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -31,7 +32,9 @@ use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 use Modules\Localization\Models\Language;
+use Modules\Localization\Models\ProductTranslation;
 use Modules\Localization\Support\Locales;
 use Modules\Pricing\Models\PriceList;
 use Modules\Products\Enums\ProductType;
@@ -82,6 +85,27 @@ class VariantsRelationManager extends RelationManager
                             ->label(__('pim.field.name'))
                             ->maxLength(255)
                             ->required($language->is_base),
+                        TextInput::make("translations.{$language->code}.slug")
+                            ->label(__('pim.field.slug'))
+                            ->maxLength(255)
+                            ->helperText(__('pim.helper.slug_from_name_translated'))
+                            ->rule(fn (?Product $record): Closure => static function (string $attribute, $value, Closure $fail) use ($language, $record): void {
+                                $value = trim((string) $value);
+
+                                if ($value === '') {
+                                    return;
+                                }
+
+                                $taken = ProductTranslation::query()
+                                    ->where('language_id', $language->id)
+                                    ->where('slug', Str::slug($value))
+                                    ->when($record, fn (Builder $q, Product $record): Builder => $q->where('product_id', '!=', $record->id))
+                                    ->exists();
+
+                                if ($taken) {
+                                    $fail(__('pim.validation.slug_taken'));
+                                }
+                            }),
                         RichEditor::make("translations.{$language->code}.description")
                             ->label(__('pim.field.description')),
                         // --- SEO (translated, one set per language) ---
@@ -105,6 +129,10 @@ class VariantsRelationManager extends RelationManager
                 ->required()
                 ->maxLength(255)
                 ->unique('products', 'sku', ignoreRecord: true),
+            TextInput::make('barcode')
+                ->label(__('pim.field.barcode'))
+                ->maxLength(255)
+                ->default(null),
             TextInput::make('stock')
                 ->label(__('pim.field.stock'))
                 ->numeric()
@@ -231,11 +259,25 @@ class VariantsRelationManager extends RelationManager
                 $this->generateVariantsAction(),
                 CreateAction::make()
                     ->label(__('pim.action.add_variant'))
-                    ->fillForm(fn (): array => [
-                        'sku' => $this->getOwnerRecord()->sku.'-NEW',
-                        'stock' => 0,
-                        'translations' => $this->readVariantTranslations($this->getOwnerRecord()),
-                    ])
+                    ->fillForm(function (): array {
+                        // The parent's name/description/meta are a convenient
+                        // starting point for a new variant, but its slug is
+                        // not: copying it verbatim would always collide (two
+                        // products can never share a slug), so it starts
+                        // blank here just like sku starts as a distinct
+                        // "-NEW" suffix rather than the parent's own sku.
+                        $translations = $this->readVariantTranslations($this->getOwnerRecord());
+
+                        foreach ($translations as $code => $row) {
+                            unset($translations[$code]['slug']);
+                        }
+
+                        return [
+                            'sku' => $this->getOwnerRecord()->sku.'-NEW',
+                            'stock' => 0,
+                            'translations' => $translations,
+                        ];
+                    })
                     ->mutateDataUsing(function (array $data): array {
                         $data['type'] = ProductType::Variant->value;
 

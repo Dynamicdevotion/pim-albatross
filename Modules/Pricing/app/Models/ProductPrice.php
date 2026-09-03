@@ -20,12 +20,14 @@ class ProductPrice extends Model
         'product_id',
         'price_list_id',
         'price',
+        'sale_price',
     ];
 
     protected function casts(): array
     {
         return [
             'price' => 'decimal:2',
+            'sale_price' => 'decimal:2',
         ];
     }
 

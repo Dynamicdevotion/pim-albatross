@@ -2,6 +2,7 @@
 
 namespace Modules\Products\Filament\Resources\Products\Schemas;
 
+use Closure;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
@@ -12,7 +13,9 @@ use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 use Modules\Localization\Models\Language;
+use Modules\Localization\Models\ProductTranslation;
 use Modules\Localization\Support\Locales;
 use Modules\Products\Enums\ProductType;
 use Modules\Products\Models\Product;
@@ -50,6 +53,10 @@ class ProductForm
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true),
+                TextInput::make('barcode')
+                    ->label(__('pim.field.barcode'))
+                    ->maxLength(255)
+                    ->default(null),
                 TextInput::make('external_id')
                     ->label(__('pim.field.external_id'))
                     ->maxLength(255)
@@ -163,6 +170,27 @@ class ProductForm
                                 ->label(__('pim.field.name'))
                                 ->maxLength(255)
                                 ->required($language->is_base),
+                            TextInput::make("translations.{$language->code}.slug")
+                                ->label(__('pim.field.slug'))
+                                ->maxLength(255)
+                                ->helperText(__('pim.helper.slug_from_name_translated'))
+                                ->rule(fn (?Product $record): Closure => static function (string $attribute, $value, Closure $fail) use ($language, $record): void {
+                                    $value = trim((string) $value);
+
+                                    if ($value === '') {
+                                        return;
+                                    }
+
+                                    $taken = ProductTranslation::query()
+                                        ->where('language_id', $language->id)
+                                        ->where('slug', Str::slug($value))
+                                        ->when($record, fn (Builder $q, Product $record): Builder => $q->where('product_id', '!=', $record->id))
+                                        ->exists();
+
+                                    if ($taken) {
+                                        $fail(__('pim.validation.slug_taken'));
+                                    }
+                                }),
                             RichEditor::make("translations.{$language->code}.description")
                                 ->label(__('pim.field.description')),
                             // --- SEO (translated, one set per language) ---

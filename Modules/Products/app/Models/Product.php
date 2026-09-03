@@ -36,6 +36,7 @@ class Product extends Model implements HasMedia
         'type',
         'parent_id',
         'sku',
+        'barcode',
         'external_id',
         'status',
         'stock',
