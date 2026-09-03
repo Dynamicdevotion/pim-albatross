@@ -47,9 +47,13 @@ use Throwable;
  * variant-defining taxonomies become global attributes ({@see AttributeResolver}),
  * and each `variant` becomes a Woo *variation* under the parent — never a
  * product of its own (`variant` is always skipped as a direct sync target,
- * see {@see syncVariable()}). Known limit of this first pass: a variation's
- * stock is sent once, on creation, with no delta reconciliation yet — that
- * only exists for simple products (and the variable/simple parent) today.
+ * see {@see syncVariable()}). A variation's stock follows the exact same
+ * delta-reconciliation model as a simple product's (see
+ * {@see reconcileStock()}, reused verbatim), with its own baseline in the
+ * variant's own {@see WooSyncProductLink} row. A variant individually
+ * archived has its variation trashed on the store (`force: false`) the same
+ * way a whole archived product is — see {@see skipArchivedVariant()} — while
+ * the rest of the parent's variants keep syncing normally.
  */
 class WooSyncRunner
 {
@@ -250,12 +254,16 @@ class WooSyncRunner
     /**
      * A variable product: resolve its variant-defining taxonomies into Woo
      * attributes, create/update the parent with them, then create/update
-     * every one of its *current* variants as a Woo variation under it. A
+     * every one of its *active* variants as a Woo variation under it. A
      * variant added since the last sync has no link yet and is created; one
      * already linked is updated — the same create-vs-update shape the
-     * parent (and simple products) already use, just one level down. No
-     * stock reconciliation for variations yet (known limit of this first
-     * pass) — {@see VariationPayload} sends the PIM value only on creation.
+     * parent (and simple products) already use, just one level down, and
+     * with the same stock delta reconciliation (see {@see syncVariation()}).
+     *
+     * An individually archived variant is excluded from the attribute
+     * options built for the parent (it is no longer a purchasable choice)
+     * and has its variation trashed on the store instead of synced — see
+     * {@see skipArchivedVariant()}.
      *
      * A failed variation doesn't fail the whole row or stop the others: the
      * parent's own result stands, with a note per failed/noteworthy
@@ -273,7 +281,9 @@ class WooSyncRunner
                 ->with(['translations', 'prices', 'media', 'taxonomyTerms.translations'])
                 ->get();
 
-            [$attributes, $variantAttributes, $notes] = $this->buildAttributes($taxonomies, $variants, $attributeResolver);
+            [$archived, $active] = $variants->partition(fn (Product $variant): bool => $variant->status === 'archived');
+
+            [$attributes, $variantAttributes, $notes] = $this->buildAttributes($taxonomies, $active, $attributeResolver);
 
             $payload = VariableProductPayload::for($product);
             $body = $payload->build($categoryIds, $attributes);
@@ -297,8 +307,16 @@ class WooSyncRunner
 
             $parentWooId = (int) $link->woocommerce_id;
 
-            foreach ($variants as $variant) {
+            foreach ($active as $variant) {
                 $note = $this->syncVariation($variant, $parentWooId, $variantAttributes[$variant->id] ?? []);
+
+                if ($note !== null) {
+                    $notes[] = $note;
+                }
+            }
+
+            foreach ($archived as $variant) {
+                $note = $this->skipArchivedVariant($variant, $parentWooId);
 
                 if ($note !== null) {
                     $notes[] = $note;
@@ -313,6 +331,43 @@ class WooSyncRunner
             throw $e;
         } catch (WooSyncException $e) {
             return ['result' => 'failed', 'reason' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * An archived variant is never created or updated — its variation is
+     * trashed on the store if it was ever synced (`force: false`, the same
+     * as a whole archived product — see {@see skipArchived()}). The link is
+     * left untouched: reactivating the variant finds the same id again via
+     * {@see currentStoreVariation()} (WooCommerce still serves a trashed
+     * variation by id) and {@see syncVariation()} republishes it — its
+     * payload always sends an explicit `status: publish`.
+     *
+     * A never-synced archived variant has nothing to trash and is silently
+     * skipped, same as {@see skipArchived()} for a never-synced product.
+     */
+    private function skipArchivedVariant(Product $variant, int $parentWooId): ?string
+    {
+        $link = WooSyncProductLink::query()->where('product_id', $variant->id)->first();
+
+        if ($link === null || $link->woocommerce_id === null) {
+            return null;
+        }
+
+        try {
+            $this->client->deleteVariation($parentWooId, (int) $link->woocommerce_id, force: false);
+
+            return __('pim.woosync.variant.note', [
+                'variant' => $variant->sku,
+                'note' => __('pim.woosync.skip.archived_trashed'),
+            ]);
+        } catch (RateLimited $e) {
+            throw $e;
+        } catch (WooSyncException) {
+            return __('pim.woosync.variant.note', [
+                'variant' => $variant->sku,
+                'note' => __('pim.woosync.skip.archived_trash_failed'),
+            ]);
         }
     }
 
@@ -374,9 +429,12 @@ class WooSyncRunner
 
     /**
      * Create/update one variant as a Woo variation under its already-synced
-     * parent. Returns a human note for the report — a failure, or a
-     * carried-over warning (e.g. missing price) — or null when there is
-     * nothing to add beyond the parent row's own outcome.
+     * parent, with the exact same stock delta reconciliation a simple
+     * product gets (see {@see reconcileStock()}, reused unmodified) against
+     * the variant's own {@see WooSyncProductLink} baseline. Returns a human
+     * note for the report — a failure, or a carried-over warning (e.g.
+     * missing price or a stock note) — or null when there is nothing to add
+     * beyond the parent row's own outcome.
      */
     private function syncVariation(Product $variant, int $parentWooId, array $attributes): ?string
     {
@@ -385,30 +443,45 @@ class WooSyncRunner
             $hadLinkId = $link->woocommerce_id !== null;
 
             $payload = VariationPayload::for($variant);
+            $body = $payload->build($attributes);
+            $notes = $payload->warnings;
             $imagesHash = $payload->imagesHash();
             $imagesUnchanged = $hadLinkId && $link->images_hash !== null && $link->images_hash === $imagesHash;
+
+            $storeVariation = $this->currentStoreVariation($parentWooId, $link);
+            $recreated = $hadLinkId && $storeVariation === null;
+
+            [$stockFields, $pimStock, $stockNote, $nextLastKnown] =
+                $this->reconcileStock($variant, $link, $storeVariation, $recreated);
+
+            if ($stockNote !== null) {
+                $notes[] = $stockNote;
+            }
 
             [$wooVariation, $result] = $this->createOrUpdateVariation(
                 $link,
                 $parentWooId,
-                $payload,
-                $attributes,
-                $hadLinkId,
+                array_merge($body, $stockFields),
                 $imagesUnchanged,
             );
+
+            if ($pimStock !== null && (int) ($variant->stock ?? 0) !== $pimStock) {
+                $variant->forceFill(['stock' => $pimStock])->saveQuietly();
+            }
 
             $link->fill([
                 'woocommerce_id' => $wooVariation['id'] ?? $link->woocommerce_id,
                 'images_hash' => $imagesHash,
                 'last_synced_at' => now(),
                 'last_status' => $result,
+                'last_known_stock' => $nextLastKnown,
             ])->save();
 
-            return $payload->warnings === []
+            return $notes === []
                 ? null
                 : __('pim.woosync.variant.note', [
                     'variant' => $variant->sku,
-                    'note' => implode(' · ', $payload->warnings),
+                    'note' => implode(' · ', $notes),
                 ]);
         } catch (RateLimited $e) {
             throw $e;
@@ -418,19 +491,12 @@ class WooSyncRunner
     }
 
     /**
-     * @param  list<array{id: int, option: string}>  $attributes
+     * @param  array<string, mixed>  $body  already carries its stock fields — see {@see syncVariation()}
      * @return array{0: array<string, mixed>, 1: string} [woo variation, 'created'|'updated']
      */
-    private function createOrUpdateVariation(
-        WooSyncProductLink $link,
-        int $parentWooId,
-        VariationPayload $payload,
-        array $attributes,
-        bool $hadLinkId,
-        bool $imagesUnchanged,
-    ): array {
-        if ($hadLinkId) {
-            $body = $payload->build($attributes, includeStock: false);
+    private function createOrUpdateVariation(WooSyncProductLink $link, int $parentWooId, array $body, bool $imagesUnchanged): array
+    {
+        if ($link->woocommerce_id !== null) {
             $updateBody = $imagesUnchanged ? Arr::except($body, ['image']) : $body;
 
             try {
@@ -438,13 +504,14 @@ class WooSyncRunner
             } catch (ResourceGone) {
                 // Raced with a deletion between our read and our write, or
                 // the variation was removed directly on the store — drop the
-                // stale id/baseline and recreate.
+                // stale id/baselines and recreate.
                 $link->woocommerce_id = null;
+                $link->last_known_stock = null;
                 $link->images_hash = null;
             }
         }
 
-        return [$this->client->createVariation($parentWooId, $payload->build($attributes, includeStock: true)), 'created'];
+        return [$this->client->createVariation($parentWooId, $body), 'created'];
     }
 
     /**
@@ -470,6 +537,33 @@ class WooSyncRunner
         }
 
         return $this->client->findProductBySku((string) $product->sku);
+    }
+
+    /**
+     * The store variation this PIM variant currently maps to, or null if
+     * there is none yet. Mirrors {@see currentStoreProduct()} exactly, minus
+     * its find-by-SKU fallback: a variation with no link yet is always a
+     * fresh create, never adopted from an existing store object (variations
+     * only ever come into being through this sync, unlike products, which
+     * can pre-exist in the store before it's connected to the PIM).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function currentStoreVariation(int $parentWooId, WooSyncProductLink $link): ?array
+    {
+        if ($link->woocommerce_id === null) {
+            return null;
+        }
+
+        try {
+            return $this->client->getVariation($parentWooId, (int) $link->woocommerce_id);
+        } catch (ResourceGone) {
+            $link->woocommerce_id = null;
+            $link->last_known_stock = null;
+            $link->images_hash = null;
+
+            return null;
+        }
     }
 
     /**

@@ -113,7 +113,7 @@ class WooSyncRunnerVariableTest extends TestCase
         }
     }
 
-    public function test_second_sync_updates_without_recreating_and_without_touching_stock(): void
+    public function test_second_sync_updates_without_recreating(): void
     {
         $parent = $this->variableWithVariants('VARB-2');
         $client = new FakeWooClient;
@@ -131,10 +131,168 @@ class WooSyncRunnerVariableTest extends TestCase
             array_values(array_filter($client->calls, static fn (string $c): bool => str_starts_with($c, 'createVariation:'))),
         );
 
+        // Nothing changed on either side between the two syncs, so the
+        // reconciled value is the same one already there — still sent
+        // (unlike the old "never touches stock" behaviour), just a no-op.
         foreach ($client->updateVariationPayloads as $payload) {
-            $this->assertArrayNotHasKey('stock_quantity', $payload);
-            $this->assertArrayNotHasKey('manage_stock', $payload);
+            $this->assertArrayHasKey('stock_quantity', $payload);
+            $this->assertTrue($payload['manage_stock']);
         }
+    }
+
+    // ---- variant stock delta reconciliation ---------------------------------
+
+    public function test_second_sync_reconciles_variant_stock_via_delta(): void
+    {
+        // Baseline was 3. Since then: +2 produced in the PIM (now 5), 1 sold
+        // on the store (now 2). Correct result: 2 + (5 - 3) = 4.
+        $parent = $this->variableWithVariants('VARB-DELTA', count: 1);
+        $variant = $parent->variants->first();
+        $variant->forceFill(['stock' => 5])->saveQuietly();
+
+        WooSyncProductLink::create(['product_id' => $parent->id, 'woocommerce_id' => 900]);
+        WooSyncProductLink::create(['product_id' => $variant->id, 'woocommerce_id' => 901, 'last_known_stock' => 3]);
+        $client = new FakeWooClient;
+        $client->variationsById[900][901] = ['id' => 901, 'manage_stock' => true, 'stock_quantity' => 2];
+
+        (new WooSyncRunner($client))->run($run = $this->makeRun([$parent->id]));
+        $run->refresh();
+
+        $this->assertSame(4, $client->updateVariationPayloads['900:901']['stock_quantity']);
+        $this->assertSame(4, $variant->fresh()->stock);
+        $this->assertSame(4, WooSyncProductLink::firstWhere('product_id', $variant->id)->last_known_stock);
+        $this->assertStringContainsString('4', (string) $run->items[0]['reason']);
+    }
+
+    public function test_variant_delta_zero_still_pulls_store_sales_into_the_pim(): void
+    {
+        // variableWithVariants() gives the first variant a stock of 3. No
+        // PIM-side change; 1 sold on the store since the baseline (now 2).
+        $parent = $this->variableWithVariants('VARB-SALES', count: 1);
+        $variant = $parent->variants->first();
+
+        WooSyncProductLink::create(['product_id' => $parent->id, 'woocommerce_id' => 910]);
+        WooSyncProductLink::create(['product_id' => $variant->id, 'woocommerce_id' => 911, 'last_known_stock' => 3]);
+        $client = new FakeWooClient;
+        $client->variationsById[910][911] = ['id' => 911, 'manage_stock' => true, 'stock_quantity' => 2];
+
+        (new WooSyncRunner($client))->run($this->makeRun([$parent->id]));
+
+        $this->assertSame(2, $client->updateVariationPayloads['910:911']['stock_quantity']);
+        $this->assertSame(2, $variant->fresh()->stock);
+    }
+
+    public function test_a_negative_variant_delta_is_clamped_to_zero(): void
+    {
+        // Baseline 3; PIM now 1 (delta -2); store now 1. 1 + (-2) = -1 -> 0.
+        $parent = $this->variableWithVariants('VARB-CLAMP', count: 1);
+        $variant = $parent->variants->first();
+        $variant->forceFill(['stock' => 1])->saveQuietly();
+
+        WooSyncProductLink::create(['product_id' => $parent->id, 'woocommerce_id' => 920]);
+        WooSyncProductLink::create(['product_id' => $variant->id, 'woocommerce_id' => 921, 'last_known_stock' => 3]);
+        $client = new FakeWooClient;
+        $client->variationsById[920][921] = ['id' => 921, 'manage_stock' => true, 'stock_quantity' => 1];
+
+        (new WooSyncRunner($client))->run($run = $this->makeRun([$parent->id]));
+        $run->refresh();
+
+        $this->assertSame(0, $client->updateVariationPayloads['920:921']['stock_quantity']);
+        $this->assertSame(0, $variant->fresh()->stock);
+        $this->assertSame(0, WooSyncProductLink::firstWhere('product_id', $variant->id)->last_known_stock);
+        $this->assertStringContainsString(__('pim.woosync.stock.clamped'), (string) $run->items[0]['reason']);
+    }
+
+    // ---- variant archiving ---------------------------------------------------
+
+    public function test_an_archived_variant_never_synced_is_skipped_with_no_woo_call(): void
+    {
+        $parent = $this->variableWithVariants('VARB-ARCH1', count: 1);
+        $variant = $parent->variants->first();
+        $variant->forceFill(['status' => 'archived'])->saveQuietly();
+
+        $client = new FakeWooClient;
+        (new WooSyncRunner($client))->run($run = $this->makeRun([$parent->id]));
+        $run->refresh();
+
+        $this->assertSame('created', $run->items[0]['result']);
+        $this->assertNull($run->items[0]['reason']);
+        $this->assertSame(
+            [],
+            array_values(array_filter($client->calls, static fn (string $c): bool => str_contains($c, 'Variation'))),
+        );
+        $this->assertNull(WooSyncProductLink::firstWhere('product_id', $variant->id));
+    }
+
+    public function test_an_archived_variant_with_a_previous_link_is_trashed_on_woo(): void
+    {
+        $parent = $this->variableWithVariants('VARB-ARCH2', count: 1);
+        $variant = $parent->variants->first();
+
+        $client = new FakeWooClient;
+        (new WooSyncRunner($client))->run($this->makeRun([$parent->id]));
+
+        $parentWooId = WooSyncProductLink::firstWhere('product_id', $parent->id)->woocommerce_id;
+        $variantWooId = WooSyncProductLink::firstWhere('product_id', $variant->id)->woocommerce_id;
+
+        $variant->forceFill(['status' => 'archived'])->saveQuietly();
+        $client->calls = [];
+
+        (new WooSyncRunner($client))->run($run = $this->makeRun([$parent->fresh()->id]));
+        $run->refresh();
+
+        $this->assertContains("deleteVariation:{$parentWooId}:{$variantWooId}:trash", $client->calls);
+        $this->assertNotContains("updateVariation:{$parentWooId}:{$variantWooId}", $client->calls);
+        $this->assertStringContainsString($variant->sku, (string) $run->items[0]['reason']);
+        // The link is left in place, ready for a later sync to find it again.
+        $this->assertSame($variantWooId, WooSyncProductLink::firstWhere('product_id', $variant->id)->woocommerce_id);
+    }
+
+    public function test_an_archived_variant_whose_woo_trash_call_fails_still_reports_a_note(): void
+    {
+        $parent = $this->variableWithVariants('VARB-ARCH3', count: 1);
+        $variant = $parent->variants->first();
+
+        $client = new FakeWooClient;
+        (new WooSyncRunner($client))->run($this->makeRun([$parent->id]));
+
+        $variant->forceFill(['status' => 'archived'])->saveQuietly();
+        $client->onDeleteVariation = function (): void {
+            throw WooSyncException::unreachable('timeout');
+        };
+
+        (new WooSyncRunner($client))->run($run = $this->makeRun([$parent->fresh()->id]));
+        $run->refresh();
+
+        $this->assertStringContainsString($variant->sku, (string) $run->items[0]['reason']);
+        $this->assertStringContainsString(
+            __('pim.woosync.skip.archived_trash_failed'),
+            (string) $run->items[0]['reason'],
+        );
+    }
+
+    public function test_a_variant_reactivated_after_being_archived_and_trashed_is_republished_not_recreated(): void
+    {
+        $parent = $this->variableWithVariants('VARB-ARCH4', count: 1);
+        $variant = $parent->variants->first();
+
+        $client = new FakeWooClient;
+        (new WooSyncRunner($client))->run($this->makeRun([$parent->id]));
+
+        $parentWooId = WooSyncProductLink::firstWhere('product_id', $parent->id)->woocommerce_id;
+        $variantWooId = WooSyncProductLink::firstWhere('product_id', $variant->id)->woocommerce_id;
+
+        $variant->forceFill(['status' => 'archived'])->saveQuietly();
+        (new WooSyncRunner($client))->run($this->makeRun([$parent->fresh()->id])); // trashes the variation
+
+        $variant->forceFill(['status' => 'active'])->saveQuietly();
+        $client->calls = [];
+        (new WooSyncRunner($client))->run($run = $this->makeRun([$parent->fresh()->id]));
+        $run->refresh();
+
+        $this->assertSame('publish', $client->updateVariationPayloads["{$parentWooId}:{$variantWooId}"]['status']);
+        $this->assertNotContains("createVariation:{$parentWooId}", $client->calls);
+        $this->assertSame($variantWooId, WooSyncProductLink::firstWhere('product_id', $variant->id)->woocommerce_id);
     }
 
     public function test_a_variant_added_after_the_first_sync_is_created_on_the_next_sync_only(): void
