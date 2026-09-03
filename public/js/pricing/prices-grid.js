@@ -5,9 +5,9 @@ document.addEventListener('alpine:init', () => {
         instance: null,
         rows: config.rows ?? [],
         columns: config.columns ?? [],   // ordered read-only column keys, e.g. ['name','sku']
-        headers: config.headers ?? {},   // { name:'Name', sku:'SKU', status:'Status', price:'Price' }
+        headers: config.headers ?? {},   // { name:'Name', sku:'SKU', status:'Status', price:'Price', sale_price:'Sale price' }
         saveTimer: null,
-        pending: {},                     // product_id -> value (debounced batch)
+        pending: {},                     // product_id -> { price?, sale_price? } (debounced batch, per-field)
 
         init() {
             this.build();
@@ -20,8 +20,23 @@ document.addEventListener('alpine:init', () => {
             });
         },
 
+        // The two editable columns are always appended last, in this order.
         priceColIndex() {
-            return this.columns.length;  // price column is always appended last
+            return this.columns.length;
+        },
+
+        salePriceColIndex() {
+            return this.columns.length + 1;
+        },
+
+        editableFieldForColumn(x) {
+            if (x === this.priceColIndex()) {
+                return 'price';
+            }
+            if (x === this.salePriceColIndex()) {
+                return 'sale_price';
+            }
+            return null;
         },
 
         columnDefs() {
@@ -32,12 +47,14 @@ document.addEventListener('alpine:init', () => {
                 type: 'text',
             }));
 
-            defs.push({
-                title: this.headers.price ?? 'Price',
-                width: 120,
-                type: 'numeric',
-                mask: '#,##0.00',
-                decimal: '.',
+            ['price', 'sale_price'].forEach((field) => {
+                defs.push({
+                    title: this.headers[field] ?? field,
+                    width: 120,
+                    type: 'numeric',
+                    mask: '#,##0.00',
+                    decimal: '.',
+                });
             });
 
             return defs;
@@ -47,6 +64,7 @@ document.addEventListener('alpine:init', () => {
             return this.rows.map((row) => [
                 ...this.columns.map((key) => row[key] ?? ''),
                 row.price ?? '',
+                row.sale_price ?? '',
             ]);
         },
 
@@ -67,12 +85,13 @@ document.addEventListener('alpine:init', () => {
                 tableOverflow: true,
                 tableHeight: '60vh',
                 onchange: (el, cell, x, y, value) => {
-                    if (parseInt(x, 10) !== self.priceColIndex()) {
+                    const field = self.editableFieldForColumn(parseInt(x, 10));
+                    if (field === null) {
                         return;
                     }
                     const row = self.rows[parseInt(y, 10)];
                     if (row) {
-                        self.queue(row.product_id, value);
+                        self.queue(row.product_id, field, value);
                     }
                 },
                 onselection: (el, x1, y1, x2, y2) => {
@@ -98,16 +117,22 @@ document.addEventListener('alpine:init', () => {
             this.build();
         },
 
-        queue(productId, value) {
-            this.pending[productId] = (value === '' || value === null) ? null : value;
+        // Merges into whatever is already pending for this product, so
+        // editing price then sale_price within the same debounce window
+        // flushes both — and editing just one never touches the other.
+        queue(productId, field, value) {
+            const current = this.pending[productId] ?? {};
+            current[field] = (value === '' || value === null) ? null : value;
+            this.pending[productId] = current;
+
             clearTimeout(this.saveTimer);
             this.saveTimer = setTimeout(() => this.flush(), 500);
         },
 
         flush() {
-            const changes = Object.entries(this.pending).map(([productId, price]) => ({
+            const changes = Object.entries(this.pending).map(([productId, fields]) => ({
                 product_id: parseInt(productId, 10),
-                price: price,
+                ...fields,
             }));
             this.pending = {};
 
