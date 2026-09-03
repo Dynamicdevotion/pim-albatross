@@ -43,6 +43,18 @@ class SavedViewsStub extends Component
     }
 }
 
+/**
+ * A second stub on a different resource key, to prove the remembered view is
+ * scoped per-screen and doesn't leak across them.
+ */
+class SavedViewsOtherStub extends SavedViewsStub
+{
+    public function savedViewResourceKey(): string
+    {
+        return 'test.other-stub';
+    }
+}
+
 class SavedViewsTest extends TestCase
 {
     use RefreshDatabase;
@@ -114,5 +126,67 @@ class SavedViewsTest extends TestCase
             ->set('savedViewId', $mine->id)
             ->assertSet('activeFilters', ['hasPrice' => 'no'])
             ->assertSet('visibleColumns', ['sku']);
+    }
+
+    // ---- session persistence across visits ---------------------------------
+
+    public function test_the_active_view_is_remembered_in_session_and_restored_on_the_next_mount(): void
+    {
+        $alice = User::factory()->create();
+        $this->actingAs($alice);
+
+        $view = SavedView::factory()->for($alice)->create([
+            'name' => 'No price', 'resource' => 'test.stub',
+            'filters' => ['hasPrice' => 'no'], 'columns' => ['sku'],
+        ]);
+
+        Livewire::test(SavedViewsStub::class)->set('savedViewId', $view->id);
+
+        // A fresh component instance simulates leaving the page and coming
+        // back within the same browser session.
+        Livewire::test(SavedViewsStub::class)
+            ->assertSet('savedViewId', $view->id)
+            ->assertSet('activeFilters', ['hasPrice' => 'no'])
+            ->assertSet('visibleColumns', ['sku']);
+    }
+
+    public function test_deselecting_the_view_stops_it_from_being_restored(): void
+    {
+        $alice = User::factory()->create();
+        $this->actingAs($alice);
+
+        $view = SavedView::factory()->for($alice)->create(['name' => 'V', 'resource' => 'test.stub']);
+
+        Livewire::test(SavedViewsStub::class)->set('savedViewId', $view->id);
+        Livewire::test(SavedViewsStub::class)->set('savedViewId', null);
+
+        Livewire::test(SavedViewsStub::class)->assertSet('savedViewId', null);
+    }
+
+    public function test_a_view_deleted_elsewhere_is_not_restored_and_the_remembered_id_is_cleared(): void
+    {
+        $alice = User::factory()->create();
+        $this->actingAs($alice);
+
+        $view = SavedView::factory()->for($alice)->create(['name' => 'V', 'resource' => 'test.stub']);
+
+        Livewire::test(SavedViewsStub::class)->set('savedViewId', $view->id);
+        $view->delete();
+
+        Livewire::test(SavedViewsStub::class)->assertSet('savedViewId', null);
+    }
+
+    public function test_the_remembered_view_is_scoped_per_screen(): void
+    {
+        $alice = User::factory()->create();
+        $this->actingAs($alice);
+
+        $view = SavedView::factory()->for($alice)->create(['name' => 'V', 'resource' => 'test.stub']);
+
+        Livewire::test(SavedViewsStub::class)->set('savedViewId', $view->id);
+
+        // a different screen (different resource key) must not pick up the
+        // view remembered for "test.stub".
+        Livewire::test(SavedViewsOtherStub::class)->assertSet('savedViewId', null);
     }
 }

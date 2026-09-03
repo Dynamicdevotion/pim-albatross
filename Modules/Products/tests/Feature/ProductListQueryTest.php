@@ -70,6 +70,26 @@ class ProductListQueryTest extends TestCase
         $this->assertSame(['MATCH'], $skus);
     }
 
+    /**
+     * search() also checks a row's parent name. It's a no-op for base()/for()
+     * (top-level only, no row ever has a parent), but it matters for a query
+     * that includes variant rows directly, like the bulk price grid — see
+     * {@see \Modules\Pricing\Filament\Pages\ManagePrices::baseQuery()}.
+     */
+    public function test_search_also_matches_a_variants_parent_name(): void
+    {
+        $parent = Product::factory()->variable()->create(['sku' => 'TS']);
+        $parent->translations()->create(['locale' => 'it', 'name' => 'Maglietta']);
+        $variant = Product::factory()->variantOf($parent)->create(['sku' => 'TS-BLU']);
+        // deliberately no translation of its own -> only the parent's name matches
+        $other = $this->product('SHOE-1', 'Scarpe');
+
+        $query = Product::query()->whereIn('id', [$variant->id, $other->id]);
+        $skus = ProductListQuery::search($query, ['term' => 'Magli'])->pluck('sku')->all();
+
+        $this->assertSame(['TS-BLU'], $skus);
+    }
+
     public function test_missing_translation_per_language_and_any(): void
     {
         $activeCodes = Locales::activeCodes();

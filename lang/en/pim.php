@@ -80,20 +80,13 @@ return [
             'variant' => 'Variant',
         ],
         'price' => [
-            'all' => 'All products',
             'with' => 'With a price',
             'without' => 'Without a price',
-        ],
-        'variant_scope' => [
-            'all' => 'All',
-            'variants' => 'Variants only',
-            'simple' => 'Simple only',
         ],
         'stock' => [
             'zero' => 'Out of stock',
             'low' => 'Low (≤ :threshold)',
         ],
-        'any' => 'Any',
         'none' => '— none —',
     ],
 
@@ -102,7 +95,6 @@ return [
         'missing_translation_any' => 'Any active language',
         'price' => 'Price',
         'type' => 'Type',
-        'variant_scope' => 'Variants',
         'taxonomy_terms' => 'Taxonomy',
         'price_presence' => 'Price presence',
     ],
