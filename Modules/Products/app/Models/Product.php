@@ -129,6 +129,27 @@ class Product extends Model implements HasMedia
         return $this->hasMany(self::class, 'parent_id');
     }
 
+    /**
+     * Products suggested as an upgrade/alternative while viewing this one.
+     * Directional (this product doesn't automatically become an upsell of
+     * its own upsells) and — enforced in the form and again at save time,
+     * never at the DB level — only ever between `simple`/`variable`
+     * products, never a `variant`.
+     */
+    public function upsells(): BelongsToMany
+    {
+        return $this->belongsToMany(self::class, 'product_upsells', 'product_id', 'related_product_id');
+    }
+
+    /**
+     * Products suggested alongside this one (e.g. at checkout). Same shape
+     * and constraints as {@see upsells()}.
+     */
+    public function crossSells(): BelongsToMany
+    {
+        return $this->belongsToMany(self::class, 'product_cross_sells', 'product_id', 'related_product_id');
+    }
+
     // ---- media --------------------------------------------------------
 
     public function registerMediaCollections(): void

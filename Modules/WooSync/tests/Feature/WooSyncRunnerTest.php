@@ -421,4 +421,66 @@ class WooSyncRunnerTest extends TestCase
         $this->assertCount(1, $run->items);
         $this->assertNotNull($run->error_message);
     }
+
+    // ---- up-sell / cross-sell ------------------------------------------------
+
+    public function test_upsell_and_cross_sell_ids_resolve_to_the_related_products_woocommerce_ids(): void
+    {
+        $upsell = $this->simple('REL-UP');
+        WooSyncProductLink::create(['product_id' => $upsell->id, 'woocommerce_id' => 555]);
+        $crossSell = $this->simple('REL-CROSS');
+        WooSyncProductLink::create(['product_id' => $crossSell->id, 'woocommerce_id' => 556]);
+
+        $product = $this->simple('REL-MAIN');
+        $product->upsells()->sync([$upsell->id]);
+        $product->crossSells()->sync([$crossSell->id]);
+
+        $client = new FakeWooClient;
+        (new WooSyncRunner($client))->run($this->makeRun([$product->id]));
+
+        $this->assertSame([555], $client->createPayloads[0]['upsell_ids']);
+        $this->assertSame([556], $client->createPayloads[0]['cross_sell_ids']);
+    }
+
+    public function test_an_unsynced_related_product_is_left_out_and_noted_but_does_not_block_the_sync(): void
+    {
+        $neverSynced = $this->simple('REL-NEW'); // no WooSyncProductLink at all
+        $product = $this->simple('REL-MAIN2');
+        $product->upsells()->sync([$neverSynced->id]);
+
+        $client = new FakeWooClient;
+        (new WooSyncRunner($client))->run($run = $this->makeRun([$product->id]));
+        $run->refresh();
+
+        $this->assertSame('created', $run->items[0]['result']);
+        $this->assertArrayNotHasKey('upsell_ids', $client->createPayloads[0]);
+        $this->assertStringContainsString('REL-NEW', (string) $run->items[0]['reason']);
+        $this->assertStringContainsString('up-sell', (string) $run->items[0]['reason']);
+    }
+
+    public function test_a_related_product_with_a_link_but_no_woocommerce_id_is_also_left_out(): void
+    {
+        $notYetPushed = $this->simple('REL-PENDING');
+        WooSyncProductLink::create(['product_id' => $notYetPushed->id]); // link row exists, woocommerce_id still null
+        $product = $this->simple('REL-MAIN3');
+        $product->crossSells()->sync([$notYetPushed->id]);
+
+        $client = new FakeWooClient;
+        (new WooSyncRunner($client))->run($run = $this->makeRun([$product->id]));
+        $run->refresh();
+
+        $this->assertArrayNotHasKey('cross_sell_ids', $client->createPayloads[0]);
+        $this->assertStringContainsString('cross-sell', (string) $run->items[0]['reason']);
+    }
+
+    public function test_a_product_with_no_upsells_or_cross_sells_omits_both_fields(): void
+    {
+        $product = $this->simple('REL-NONE');
+
+        $client = new FakeWooClient;
+        (new WooSyncRunner($client))->run($this->makeRun([$product->id]));
+
+        $this->assertArrayNotHasKey('upsell_ids', $client->createPayloads[0]);
+        $this->assertArrayNotHasKey('cross_sell_ids', $client->createPayloads[0]);
+    }
 }
