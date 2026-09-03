@@ -135,6 +135,7 @@ return [
         'internal_code' => 'Technical identifier used internally (e.g. WooCommerce sync, import); generated automatically from the name, not editable.',
         'sale_price' => 'Discounted price shown instead of the regular price; leave blank for no offer.',
         'bulk_dimensions_blank_skips' => 'Leave a field blank to leave it unchanged. Selected variable products are excluded automatically: they have no stock or dimensions of their own.',
+        'bulk_dimensions_blank_skips_variant' => 'Leave a field blank to leave it unchanged.',
         'language_code' => 'ISO 639-1, lowercase (e.g. "it", "en").',
         'percent' => 'e.g. 10 for +10%, -15 for −15%. Blank copies prices unchanged.',
         'percent_short' => 'e.g. 10 for +10%, -15 for −15%.',

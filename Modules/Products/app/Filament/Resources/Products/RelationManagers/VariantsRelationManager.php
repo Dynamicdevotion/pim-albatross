@@ -4,6 +4,7 @@ namespace Modules\Products\Filament\Resources\Products\RelationManagers;
 
 use Closure;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -32,6 +33,7 @@ use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Modules\Localization\Models\Language;
 use Modules\Localization\Models\ProductTranslation;
@@ -304,9 +306,79 @@ class VariantsRelationManager extends RelationManager
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    self::bulkSetStockAndDimensionsAction(),
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * Sets stock/weight/length/width/height on the selected variants — a
+     * field left blank in the form is not touched on any record (same
+     * "blank means leave it alone" rule as the equivalent bulk action on the
+     * main products list). Unlike that one, no row here is ever a variable
+     * container — every record in this table is a `variant` — so there is
+     * nothing to exclude or report separately.
+     */
+    protected static function bulkSetStockAndDimensionsAction(): BulkAction
+    {
+        return BulkAction::make('bulkSetStockAndDimensions')
+            ->label(__('pim.action.bulk_set_stock_and_dimensions'))
+            ->icon('heroicon-o-cube')
+            ->modalDescription(__('pim.helper.bulk_dimensions_blank_skips_variant'))
+            ->schema([
+                TextInput::make('stock')
+                    ->label(__('pim.field.stock'))
+                    ->numeric()
+                    ->minValue(0),
+                TextInput::make('weight')
+                    ->label(__('pim.field.weight'))
+                    ->numeric()
+                    ->minValue(0)
+                    ->suffix('kg'),
+                TextInput::make('length')
+                    ->label(__('pim.field.length'))
+                    ->numeric()
+                    ->minValue(0)
+                    ->suffix('cm'),
+                TextInput::make('width')
+                    ->label(__('pim.field.width'))
+                    ->numeric()
+                    ->minValue(0)
+                    ->suffix('cm'),
+                TextInput::make('height')
+                    ->label(__('pim.field.height'))
+                    ->numeric()
+                    ->minValue(0)
+                    ->suffix('cm'),
+            ])
+            ->action(function (Collection $records, array $data): void {
+                $fields = collect($data)
+                    ->only(['stock', 'weight', 'length', 'width', 'height'])
+                    ->filter(fn (mixed $value): bool => filled($value))
+                    ->all();
+
+                if ($fields === []) {
+                    Notification::make()
+                        ->warning()
+                        ->title(__('pim.notification.bulk_dimensions_nothing_to_set'))
+                        ->send();
+
+                    return;
+                }
+
+                $records->each(fn (Product $variant) => $variant->update($fields));
+
+                Notification::make()
+                    ->success()
+                    ->title(trans_choice(
+                        'pim.notification.stock_dimensions_bulk_updated',
+                        $records->count(),
+                        ['count' => $records->count()],
+                    ))
+                    ->send();
+            })
+            ->deselectRecordsAfterCompletion();
     }
 
     protected function generateVariantsAction(): Action

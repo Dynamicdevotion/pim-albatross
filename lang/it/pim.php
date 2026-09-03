@@ -135,6 +135,7 @@ return [
         'internal_code' => 'Identificativo tecnico usato internamente (es. sincronizzazione WooCommerce, import); generato automaticamente dal nome, non modificabile.',
         'sale_price' => 'Prezzo scontato mostrato al posto del prezzo pieno; lascia vuoto per nessuna offerta.',
         'bulk_dimensions_blank_skips' => 'Lascia vuoto un campo per non modificarlo. I prodotti variabili selezionati vengono esclusi automaticamente: non hanno giacenza o dimensioni proprie.',
+        'bulk_dimensions_blank_skips_variant' => 'Lascia vuoto un campo per non modificarlo.',
         'language_code' => 'ISO 639-1, minuscolo (es. "it", "en").',
         'percent' => 'es. 10 per +10%, -15 per −15%. Vuoto copia i prezzi invariati.',
         'percent_short' => 'es. 10 per +10%, -15 per −15%.',
