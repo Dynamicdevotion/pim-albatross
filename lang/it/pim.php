@@ -80,20 +80,13 @@ return [
             'variant' => 'Variante',
         ],
         'price' => [
-            'all' => 'Tutti i prodotti',
             'with' => 'Con prezzo',
             'without' => 'Senza prezzo',
-        ],
-        'variant_scope' => [
-            'all' => 'Tutti',
-            'variants' => 'Solo varianti',
-            'simple' => 'Solo semplici',
         ],
         'stock' => [
             'zero' => 'Giacenza a zero',
             'low' => 'Bassa (≤ :threshold)',
         ],
-        'any' => 'Qualsiasi',
         'none' => '— nessuna —',
     ],
 
@@ -102,7 +95,6 @@ return [
         'missing_translation_any' => 'Una qualsiasi lingua attiva',
         'price' => 'Prezzo',
         'type' => 'Tipo',
-        'variant_scope' => 'Varianti',
         'taxonomy_terms' => 'Tassonomia',
         'price_presence' => 'Presenza prezzo',
     ],

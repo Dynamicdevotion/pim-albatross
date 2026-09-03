@@ -9,6 +9,11 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Concerns\InteractsWithTable;
+use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Enums\FiltersLayout;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Modules\Localization\Support\Locales;
@@ -16,7 +21,9 @@ use Modules\Pricing\Models\PriceList;
 use Modules\Pricing\Models\ProductPrice;
 use Modules\Pricing\Support\PriceAdjuster;
 use Modules\Products\Enums\ProductType;
+use Modules\Products\Filament\Resources\Products\Tables\ProductsTable;
 use Modules\Products\Models\Product;
+use Modules\Products\Support\ProductListQuery;
 use Modules\SavedViews\Filament\Concerns\InteractsWithSavedViews;
 use Modules\Taxonomies\Models\Taxonomy;
 use Modules\Taxonomies\Models\TaxonomyTerm;
@@ -29,10 +36,20 @@ use Modules\Taxonomies\Models\TaxonomyTerm;
  * Rows are the priceable products — simple products and variants; the variable
  * container itself has no price and is left out. Variant rows are labelled
  * "— Parent › Variant" and ordered next to their siblings.
+ *
+ * The filter drawer reuses the exact same {@see ProductsTable} filter set as
+ * the products list (search, type, status, missing translation, taxonomy,
+ * stock — all backed by {@see ProductListQuery}, the single place that logic
+ * lives), plus one filter of its own: "price presence", scoped to whichever
+ * price list this page currently has selected rather than a filter-chosen
+ * one. `HasTable`/`InteractsWithTable` are used purely for that filter engine
+ * (drawer form, deferred apply/reset, active-filter badge) — the grid itself
+ * is the jspreadsheet below, not a Filament table.
  */
-class ManagePrices extends Page
+class ManagePrices extends Page implements HasTable
 {
     use InteractsWithSavedViews;
+    use InteractsWithTable;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
@@ -51,14 +68,6 @@ class ManagePrices extends Page
     private const ROW_CAP = 1000;
 
     public ?int $priceListId = null;
-
-    public string $search = '';
-
-    public ?string $hasPrice = null;      // 'yes' | 'no' | null
-
-    public ?int $categoryTermId = null;
-
-    public ?string $variantScope = null;  // 'variants' | 'simple' | null
 
     /** @var list<string> */
     public array $visibleColumns = ['name', 'sku', 'status'];
@@ -92,6 +101,72 @@ class ManagePrices extends Page
             ?? PriceList::query()->value('id');
     }
 
+    /**
+     * The shared products-list filter set (search, type, status, missing
+     * translation, taxonomy, stock) plus this page's own price-presence
+     * filter. Never rendered as a real table — see the class docblock.
+     */
+    public function table(Table $table): Table
+    {
+        return $table
+            ->query(fn (): Builder => $this->baseQuery())
+            ->filtersLayout(FiltersLayout::Hidden)
+            ->filtersFormColumns(2)
+            ->filters([
+                ProductsTable::searchFilter(),
+                ProductsTable::typeFilter(),
+                ProductsTable::statusFilter(),
+                ProductsTable::missingTranslationFilter(),
+                ProductsTable::taxonomyFilter(),
+                $this->pricePresenceFilter(),
+                ProductsTable::stockFilter(),
+            ]);
+    }
+
+    /**
+     * "Presenza prezzo": with/without + range, always evaluated against
+     * whichever price list this page currently has selected — unlike the
+     * products-list price filter, it has no price-list picker of its own.
+     */
+    protected function pricePresenceFilter(): Filter
+    {
+        return Filter::make('price')
+            ->label(__('pim.filter.price'))
+            ->columns(2)
+            ->schema([
+                Select::make('presence')
+                    ->label(__('pim.filter.price_presence'))
+                    ->native(false)
+                    ->options([
+                        'with' => __('pim.option.price.with'),
+                        'without' => __('pim.option.price.without'),
+                    ]),
+                TextInput::make('min')->label(__('pim.field.price_min'))->numeric()->minValue(0),
+                TextInput::make('max')->label(__('pim.field.price_max'))->numeric()->minValue(0),
+            ])
+            ->query(fn (Builder $query, array $data): Builder => ProductListQuery::price(
+                $query,
+                [...$data, 'price_list_id' => $this->priceListId],
+            ))
+            ->indicateUsing(function (array $data): ?string {
+                $parts = [];
+
+                if (($data['presence'] ?? null) === 'with') {
+                    $parts[] = __('pim.option.price.with');
+                }
+
+                if (($data['presence'] ?? null) === 'without') {
+                    $parts[] = __('pim.option.price.without');
+                }
+
+                if (filled($data['min'] ?? null) || filled($data['max'] ?? null)) {
+                    $parts[] = trim(($data['min'] ?? '').' – '.($data['max'] ?? ''), ' –');
+                }
+
+                return $parts === [] ? null : __('pim.filter.price').': '.implode(', ', $parts);
+            });
+    }
+
     // ---- saved views contract -------------------------------------------------
 
     public function savedViewResourceKey(): string
@@ -102,12 +177,7 @@ class ManagePrices extends Page
     public function captureViewState(): array
     {
         return [
-            'filters' => [
-                'search' => $this->search,
-                'hasPrice' => $this->hasPrice,
-                'categoryTermId' => $this->categoryTermId,
-                'variantScope' => $this->variantScope,
-            ],
+            'filters' => $this->tableFilters ?? [],
             'columns' => array_values($this->visibleColumns),
         ];
     }
@@ -115,10 +185,9 @@ class ManagePrices extends Page
     public function applyViewState(array $state): void
     {
         $filters = $state['filters'] ?? [];
-        $this->search = (string) ($filters['search'] ?? '');
-        $this->hasPrice = $filters['hasPrice'] ?? null;
-        $this->categoryTermId = isset($filters['categoryTermId']) ? (int) $filters['categoryTermId'] : null;
-        $this->variantScope = $filters['variantScope'] ?? null;
+        $this->tableDeferredFilters = $filters;
+        $this->tableFilters = $filters;
+        $this->getTableFiltersForm()->fill($filters);
         $this->visibleColumns = $state['columns'] ?? ['name', 'sku', 'status'];
 
         $this->refreshGrid();
@@ -128,9 +197,23 @@ class ManagePrices extends Page
 
     public function updated(string $property): void
     {
-        if (in_array($property, ['priceListId', 'search', 'hasPrice', 'categoryTermId', 'variantScope', 'visibleColumns'], true)) {
+        if (in_array($property, ['priceListId', 'visibleColumns'], true)) {
             $this->refreshGrid();
         }
+    }
+
+    /**
+     * Overrides {@see \Filament\Tables\Concerns\HasFilters::applyTableFilters()}
+     * only to also refresh the grid: the grid container is `wire:ignore`d (so
+     * jspreadsheet keeps ownership of its DOM), so it never picks up a filter
+     * change from Livewire's normal re-render — it needs the same manual
+     * `prices-grid-data` dispatch every other toolbar control uses.
+     */
+    public function applyTableFilters(): void
+    {
+        $this->tableFilters = $this->tableDeferredFilters;
+        $this->handleTableFilterUpdates();
+        $this->refreshGrid();
     }
 
     protected function refreshGrid(): void
@@ -247,40 +330,31 @@ class ManagePrices extends Page
     }
 
     /**
+     * The priceable-rows base scope (simple products and variants; the
+     * variable container itself is never priced) plus every active filter,
+     * applied through {@see ProductListQuery::apply()} — the same filter
+     * clauses the products list and the export use. The `price` filter's
+     * `price_list_id` is always forced to this page's own selector, never to
+     * whatever a filter (live, restored from a saved view, or from session)
+     * happens to carry, since "presence" only makes sense for the list this
+     * grid is currently editing.
+     *
      * @return Builder<Product>
      */
     protected function baseQuery(): Builder
     {
-        $baseLanguageId = Locales::idFor(Locales::baseCode());
+        $filters = $this->tableFilters ?? [];
+        $filters['price'] = [...($filters['price'] ?? []), 'price_list_id' => $this->priceListId];
 
-        return Product::query()
+        $query = Product::query()
             // Priceable rows only: variable containers carry no price of their own.
             ->where('type', '!=', ProductType::Variable->value)
-            ->when($this->variantScope === 'variants', fn (Builder $q) => $q->where('type', ProductType::Variant->value))
-            ->when($this->variantScope === 'simple', fn (Builder $q) => $q->where('type', ProductType::Simple->value))
-            ->when($this->search !== '', fn (Builder $q) => $q->where(fn (Builder $w) => $w
-                ->where('sku', 'like', "%{$this->search}%")
-                ->orWhereHas('translations', fn (Builder $t) => $t
-                    ->where('language_id', $baseLanguageId)
-                    ->where('name', 'like', "%{$this->search}%"))
-                ->orWhereHas('parent.translations', fn (Builder $t) => $t
-                    ->where('language_id', $baseLanguageId)
-                    ->where('name', 'like', "%{$this->search}%"))))
-            ->when($this->hasPrice === 'yes', fn (Builder $q) => $q->whereHas(
-                'prices', fn (Builder $r) => $r->where('price_list_id', $this->priceListId),
-            ))
-            ->when($this->hasPrice === 'no', fn (Builder $q) => $q->whereDoesntHave(
-                'prices', fn (Builder $r) => $r->where('price_list_id', $this->priceListId),
-            ))
-            ->when($this->categoryTermId, function (Builder $q): void {
-                $term = TaxonomyTerm::query()->find($this->categoryTermId);
-                $ids = $term ? [$term->getKey(), ...$term->descendantIds()] : [$this->categoryTermId];
-                $q->whereHas('taxonomyTerms', fn (Builder $t) => $t->whereIn('taxonomy_terms.id', $ids));
-            })
             // Keep a variant family together, then order by SKU.
             ->orderByRaw('COALESCE(parent_id, id)')
             ->orderByRaw('parent_id IS NOT NULL')
             ->orderBy('sku');
+
+        return ProductListQuery::apply($query, $filters);
     }
 
     // ---- persistence from the grid ----------------------------------------

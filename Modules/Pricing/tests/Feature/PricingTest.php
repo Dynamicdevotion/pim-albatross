@@ -14,6 +14,7 @@ use Modules\Pricing\Filament\Resources\PriceLists\Pages\CreatePriceList;
 use Modules\Pricing\Filament\Resources\PriceLists\Pages\ListPriceLists;
 use Modules\Pricing\Models\PriceList;
 use Modules\Pricing\Models\ProductPrice;
+use Modules\Products\Enums\ProductType;
 use Modules\Products\Filament\Resources\Products\Pages\CreateProduct;
 use Modules\Products\Filament\Resources\Products\Pages\EditProduct;
 use Modules\Products\Models\Product;
@@ -142,7 +143,7 @@ class PricingTest extends TestCase
         $this->assertDatabaseCount('product_prices', 1);
     }
 
-    public function test_manage_prices_rows_respect_search_price_and_category_filters(): void
+    public function test_manage_prices_rows_respect_search_price_and_taxonomy_filters(): void
     {
         $list = PriceList::create(['name' => 'Std', 'is_default' => true]);
         $shirt = $this->product('Maglietta', 'CAT-1');
@@ -159,16 +160,33 @@ class PricingTest extends TestCase
 
         $skus = fn () => collect($page->rows())->pluck('sku')->sort()->values()->all();
 
-        $page->search = 'Magli';
+        // these filters are the exact same ProductListQuery clauses the
+        // products list uses (search / price / taxonomy_terms), reused here
+        // rather than reimplemented.
+        $page->tableFilters = ['search' => ['term' => 'Magli']];
         $this->assertSame(['CAT-1'], $skus());
 
-        $page->search = '';
-        $page->hasPrice = 'no';
+        $page->tableFilters = ['price' => ['presence' => 'without']];
         $this->assertSame(['CAT-2', 'OTH-1'], $skus());
 
-        $page->hasPrice = null;
-        $page->categoryTermId = $clothing->id;
+        $page->tableFilters = ['taxonomy_terms' => ['terms' => [$clothing->id]]];
         $this->assertSame(['CAT-1', 'CAT-2'], $skus());
+    }
+
+    public function test_price_filter_always_uses_the_pages_selected_price_list_not_a_stale_one(): void
+    {
+        $list = PriceList::create(['name' => 'Std', 'is_default' => true]);
+        $other = PriceList::create(['name' => 'Other']);
+        $priced = $this->product('Uno', 'PL-1');
+        $priced->prices()->create(['price_list_id' => $other->id, 'price' => 10]); // priced on the OTHER list only
+
+        $page = Livewire::test(ManagePrices::class)->set('priceListId', $list->id)->instance();
+
+        // even if filter state carries a different price_list_id (e.g. a
+        // stale saved view), the page's own selector always wins.
+        $page->tableFilters = ['price' => ['presence' => 'with', 'price_list_id' => $other->id]];
+
+        $this->assertSame([], collect($page->rows())->pluck('sku')->all());
     }
 
     public function test_manage_prices_selection_percentage_bulk_action(): void
@@ -226,14 +244,36 @@ class PricingTest extends TestCase
             'user_id' => $user->id,
             'resource' => 'pricing.prices',
             'name' => 'Missing only',
-            'filters' => ['search' => '', 'hasPrice' => 'no', 'categoryTermId' => null],
+            'filters' => ['price' => ['presence' => 'without']],
             'columns' => ['name', 'sku'],
         ]);
 
         Livewire::test(ManagePrices::class)
             ->set('priceListId', $list->id)
             ->set('savedViewId', $view->id)
-            ->assertSet('hasPrice', 'no')
+            ->assertSet('tableFilters', ['price' => ['presence' => 'without']])
+            ->assertSet('visibleColumns', ['name', 'sku']);
+    }
+
+    public function test_manage_prices_remembers_the_active_view_across_visits_in_the_same_session(): void
+    {
+        $list = PriceList::create(['name' => 'Std', 'is_default' => true]);
+        $user = User::query()->first();
+
+        $view = \Modules\SavedViews\Models\SavedView::create([
+            'user_id' => $user->id,
+            'resource' => 'pricing.prices',
+            'name' => 'Missing only',
+            'filters' => ['price' => ['presence' => 'without']],
+            'columns' => ['name', 'sku'],
+        ]);
+
+        Livewire::test(ManagePrices::class)->set('savedViewId', $view->id);
+
+        // simulate leaving the page and coming back within the same browser session
+        Livewire::test(ManagePrices::class)
+            ->assertSet('savedViewId', $view->id)
+            ->assertSet('tableFilters', ['price' => ['presence' => 'without']])
             ->assertSet('visibleColumns', ['name', 'sku']);
     }
 
@@ -356,7 +396,7 @@ class PricingTest extends TestCase
         $this->assertSame('— Maglietta › Rosso', $variantRow['name']);
     }
 
-    public function test_price_grid_variant_scope_filter(): void
+    public function test_price_grid_type_filter_replaces_the_old_variant_scope_filter(): void
     {
         $list = PriceList::create(['name' => 'Std', 'is_default' => true]);
         [, $variant] = $this->variableWithVariant('AAA', 'Alpha');
@@ -365,13 +405,19 @@ class PricingTest extends TestCase
         $page = Livewire::test(ManagePrices::class)->set('priceListId', $list->id)->instance();
         $skus = fn () => collect($page->rows())->pluck('sku')->sort()->values()->all();
 
-        $page->variantScope = 'variants';
+        $page->tableFilters = ['type' => ['value' => ProductType::Variant->value]];
         $this->assertSame(['AAA-V'], $skus());
 
-        $page->variantScope = 'simple';
+        $page->tableFilters = ['type' => ['value' => ProductType::Simple->value]];
         $this->assertSame(['PLAIN-9'], $skus());
 
-        $page->variantScope = null;
+        // the variable container is never a grid row anyway, so filtering
+        // for it deliberately yields nothing — an accepted edge case rather
+        // than a special case to work around.
+        $page->tableFilters = ['type' => ['value' => ProductType::Variable->value]];
+        $this->assertSame([], $skus());
+
+        $page->tableFilters = [];
         $this->assertSame(['AAA-V', 'PLAIN-9'], $skus());
     }
 
@@ -382,7 +428,7 @@ class PricingTest extends TestCase
         $this->product('Scarpe', 'SHOE-1');
 
         $page = Livewire::test(ManagePrices::class)->set('priceListId', $list->id)->instance();
-        $page->search = 'Magli';
+        $page->tableFilters = ['search' => ['term' => 'Magli']];
 
         $this->assertSame(['MGL-BLU'], collect($page->rows())->pluck('sku')->all());
     }

@@ -68,6 +68,25 @@ class ProductsSavedViewsTest extends TestCase
             ->assertCanNotSeeTableRecords([$plenty]);
     }
 
+    public function test_the_active_view_survives_leaving_and_returning_within_the_same_session(): void
+    {
+        $view = SavedView::create([
+            'user_id' => auth()->id(),
+            'resource' => 'products',
+            'name' => 'Esauriti',
+            'filters' => ['stock' => ['level' => 'zero']],
+            'columns' => [],
+        ]);
+
+        Livewire::test(ListProducts::class)->set('savedViewId', $view->id);
+
+        // a fresh component instance simulates navigating away and back
+        // within the same browser session
+        Livewire::test(ListProducts::class)
+            ->assertSet('savedViewId', $view->id)
+            ->assertSet('tableFilters', ['stock' => ['level' => 'zero']]);
+    }
+
     public function test_view_options_are_scoped_to_the_products_key_and_current_user(): void
     {
         SavedView::create([

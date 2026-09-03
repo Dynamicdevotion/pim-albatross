@@ -155,37 +155,10 @@ class ProductsTable
             // not also render a trigger/panel of its own.
             ->filtersLayout(FiltersLayout::Hidden)
             ->filtersFormColumns(2)
-            // Every filter's query lives in ProductListQuery so the export can
-            // replay the exact same clauses from a saved filter snapshot.
-            ->filters([
-                self::searchFilter(),
-                SelectFilter::make('type')
-                    ->label(__('pim.filter.type'))
-                    ->options(collect(ProductType::cases())
-                        ->mapWithKeys(fn (ProductType $type): array => [$type->value => $type->getLabel()])
-                        ->all())
-                    ->query(fn (Builder $query, array $data): Builder => ProductListQuery::type($query, $data)),
-                SelectFilter::make('status')
-                    ->label(__('pim.field.status'))
-                    ->options([
-                        'draft' => __('pim.option.status.draft'),
-                        'active' => __('pim.option.status.active'),
-                        'archived' => __('pim.option.status.archived'),
-                    ])
-                    ->query(fn (Builder $query, array $data): Builder => ProductListQuery::status($query, $data)),
-                SelectFilter::make('missing_translation')
-                    ->label(__('pim.filter.missing_translation'))
-                    ->options(fn (): array => [
-                        '*' => __('pim.filter.missing_translation_any'),
-                        ...Locales::active()
-                            ->mapWithKeys(fn (Language $language): array => [$language->code => $language->name])
-                            ->all(),
-                    ])
-                    ->query(fn (Builder $query, array $data): Builder => ProductListQuery::missingTranslation($query, $data)),
-                self::taxonomyFilter(),
-                self::priceFilter(),
-                self::stockFilter(),
-            ])
+            // Every filter's query lives in ProductListQuery so the export (and
+            // the bulk price grid) can replay the exact same clauses from a
+            // saved filter snapshot.
+            ->filters(self::filters())
             ->recordActions([
                 EditAction::make(),
                 // Extra per-row actions contributed by other modules (e.g.
@@ -224,10 +197,66 @@ class ProductsTable
     }
 
     /**
+     * The full filter set behind the drawer, in display order. Public so other
+     * screens over the same product query (the bulk price grid) can reuse the
+     * identical set, or compose their own subset plus a screen-specific filter
+     * — see {@see \Modules\Pricing\Filament\Pages\ManagePrices}.
+     *
+     * @return list<Filter>
+     */
+    public static function filters(): array
+    {
+        return [
+            self::searchFilter(),
+            self::typeFilter(),
+            self::statusFilter(),
+            self::missingTranslationFilter(),
+            self::taxonomyFilter(),
+            self::priceFilter(),
+            self::stockFilter(),
+        ];
+    }
+
+    public static function typeFilter(): SelectFilter
+    {
+        return SelectFilter::make('type')
+            ->label(__('pim.filter.type'))
+            ->options(collect(ProductType::cases())
+                ->mapWithKeys(fn (ProductType $type): array => [$type->value => $type->getLabel()])
+                ->all())
+            ->query(fn (Builder $query, array $data): Builder => ProductListQuery::type($query, $data));
+    }
+
+    public static function statusFilter(): SelectFilter
+    {
+        return SelectFilter::make('status')
+            ->label(__('pim.field.status'))
+            ->options([
+                'draft' => __('pim.option.status.draft'),
+                'active' => __('pim.option.status.active'),
+                'archived' => __('pim.option.status.archived'),
+            ])
+            ->query(fn (Builder $query, array $data): Builder => ProductListQuery::status($query, $data));
+    }
+
+    public static function missingTranslationFilter(): SelectFilter
+    {
+        return SelectFilter::make('missing_translation')
+            ->label(__('pim.filter.missing_translation'))
+            ->options(fn (): array => [
+                '*' => __('pim.filter.missing_translation_any'),
+                ...Locales::active()
+                    ->mapWithKeys(fn (Language $language): array => [$language->code => $language->name])
+                    ->all(),
+            ])
+            ->query(fn (Builder $query, array $data): Builder => ProductListQuery::missingTranslation($query, $data));
+    }
+
+    /**
      * Free-text search on the base-language name or the SKU. Replaces the
      * generic toolbar search box, deferred like every other filter.
      */
-    protected static function searchFilter(): Filter
+    public static function searchFilter(): Filter
     {
         return Filter::make('search')
             ->label(__('pim.field.search'))
@@ -249,7 +278,7 @@ class ProductsTable
      * Faceted taxonomy filter: AND across taxonomies, OR within one, each
      * selected term expanded to its subtree.
      */
-    protected static function taxonomyFilter(): Filter
+    public static function taxonomyFilter(): Filter
     {
         return Filter::make('taxonomy_terms')
             ->label(__('pim.filter.taxonomy_terms'))
@@ -278,7 +307,7 @@ class ProductsTable
     /**
      * Price presence + range, on one price list (default: the default list).
      */
-    protected static function priceFilter(): Filter
+    public static function priceFilter(): Filter
     {
         return Filter::make('price')
             ->label(__('pim.filter.price'))
@@ -339,7 +368,7 @@ class ProductsTable
     /**
      * Stock level. `whereNotNull('stock')` keeps variable containers out.
      */
-    protected static function stockFilter(): Filter
+    public static function stockFilter(): Filter
     {
         $threshold = (int) config('products.low_stock_threshold', 5);
 

@@ -83,7 +83,10 @@ class ProductListQuery
     }
 
     /**
-     * Free-text search on the base-language name or the SKU.
+     * Free-text search on the base-language name or the SKU. Also matches a
+     * variant's parent name, so a query that only scopes top-level rows (the
+     * products list, the export) never exercises that branch — it exists for
+     * queries that include variant rows directly, like the bulk price grid.
      *
      * @param  Builder<Product>  $query
      * @param  array<string, mixed>  $data
@@ -97,15 +100,23 @@ class ProductListQuery
             return $query;
         }
 
-        return $query->where(function (Builder $inner) use ($term): void {
+        $languageId = Locales::idFor(Locales::baseCode());
+
+        return $query->where(function (Builder $inner) use ($term, $languageId): void {
             $inner
                 ->whereHas(
                     'translations',
                     fn (Builder $relation): Builder => $relation
-                        ->where('language_id', Locales::idFor(Locales::baseCode()))
+                        ->where('language_id', $languageId)
                         ->where('name', 'like', "%{$term}%"),
                 )
-                ->orWhere('sku', 'like', "%{$term}%");
+                ->orWhere('sku', 'like', "%{$term}%")
+                ->orWhereHas(
+                    'parent.translations',
+                    fn (Builder $relation): Builder => $relation
+                        ->where('language_id', $languageId)
+                        ->where('name', 'like', "%{$term}%"),
+                );
         });
     }
 

@@ -15,10 +15,30 @@ use Modules\SavedViews\Models\SavedView;
  * `savedViewId` property, the option list and the save/update/delete actions —
  * comes from here. Designed to be reused across the panel (price grid now,
  * resource list pages later by snapshotting tableFilters / toggledTableColumns).
+ *
+ * The active view also survives navigating away and back within the same
+ * browser session (Laravel session, not a database column): whichever view
+ * was last loaded, saved or cleared on a given screen is remembered under a
+ * key scoped to that screen's {@see savedViewResourceKey()}. It's restored
+ * from the *rendering* lifecycle hook rather than `mount`: a consumer built
+ * on `Filament\Tables\Concerns\InteractsWithTable` (the price grid, any
+ * resource list page) only finishes building its `Table` instance in its own
+ * `booted` hook, and applying a view needs that table to already exist (it
+ * calls `getTableFiltersForm()`). `rendering` always runs after every
+ * trait's `mount`/`booted` phase has finished, so it works regardless of
+ * which order the consumer's traits happen to be declared in — see
+ * {@see renderingInteractsWithSavedViews()}, which Livewire calls
+ * automatically.
  */
 trait InteractsWithSavedViews
 {
     public ?int $savedViewId = null;
+
+    /**
+     * Set for exactly one render — the first one after a mount that found a
+     * remembered view — then consumed and cleared.
+     */
+    protected bool $shouldRestoreSavedViewOnRender = false;
 
     /**
      * A stable key identifying the screen these views belong to,
@@ -53,6 +73,38 @@ trait InteractsWithSavedViews
             ->all();
     }
 
+    /**
+     * Livewire calls `mount{TraitName}()` hooks automatically. Only stages
+     * the id here (cheap, no table access needed) — the actual restore
+     * happens on the next render, once the consumer's table (if any) exists.
+     */
+    public function mountInteractsWithSavedViews(): void
+    {
+        $sessionViewId = session($this->savedViewSessionKey());
+
+        if ($sessionViewId === null) {
+            return;
+        }
+
+        $this->savedViewId = $sessionViewId;
+        $this->shouldRestoreSavedViewOnRender = true;
+    }
+
+    /**
+     * Livewire calls `rendering{TraitName}()` hooks automatically, after
+     * every trait's `mount`/`booted` phase has finished — see the class
+     * docblock for why this can't happen any earlier.
+     */
+    public function renderingInteractsWithSavedViews($view = null, $data = null): void
+    {
+        if (! $this->shouldRestoreSavedViewOnRender) {
+            return;
+        }
+
+        $this->shouldRestoreSavedViewOnRender = false;
+        $this->loadSavedView();
+    }
+
     public function updatedSavedViewId(): void
     {
         $this->loadSavedView();
@@ -61,6 +113,8 @@ trait InteractsWithSavedViews
     public function loadSavedView(): void
     {
         if (blank($this->savedViewId)) {
+            $this->rememberSavedViewInSession();
+
             return;
         }
 
@@ -72,6 +126,7 @@ trait InteractsWithSavedViews
 
         if ($view === null) {
             $this->savedViewId = null;
+            $this->rememberSavedViewInSession();
 
             return;
         }
@@ -80,6 +135,8 @@ trait InteractsWithSavedViews
             'filters' => $view->filters ?? [],
             'columns' => $view->columns ?? [],
         ]);
+
+        $this->rememberSavedViewInSession();
     }
 
     public function saveViewAction(): Action
@@ -109,6 +166,7 @@ trait InteractsWithSavedViews
                 );
 
                 $this->savedViewId = $view->getKey();
+                $this->rememberSavedViewInSession();
 
                 Notification::make()
                     ->title(__('pim.notification.view_saved', ['name' => $view->name]))
@@ -156,12 +214,34 @@ trait InteractsWithSavedViews
             ->action(function (): void {
                 $this->currentSavedView()?->delete();
                 $this->savedViewId = null;
+                $this->rememberSavedViewInSession();
 
                 Notification::make()
                     ->title(__('pim.notification.view_deleted'))
                     ->success()
                     ->send();
             });
+    }
+
+    protected function savedViewSessionKey(): string
+    {
+        return 'saved_view.'.$this->savedViewResourceKey();
+    }
+
+    /**
+     * Keeps the session's remembered view in sync with `$savedViewId` —
+     * called after every load, save or delete so the next visit within this
+     * browser session picks up exactly where the user left off.
+     */
+    protected function rememberSavedViewInSession(): void
+    {
+        if (blank($this->savedViewId)) {
+            session()->forget($this->savedViewSessionKey());
+
+            return;
+        }
+
+        session()->put($this->savedViewSessionKey(), $this->savedViewId);
     }
 
     protected function currentSavedView(): ?SavedView
