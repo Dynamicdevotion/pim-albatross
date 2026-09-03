@@ -274,7 +274,11 @@ class FakeWooClient implements WooCommerceClient
             return ($this->onGetVariation)($productId, $variationId);
         }
 
-        return $this->variationsById[$productId][$variationId] ?? ['id' => $variationId];
+        // Fall back to a bare stock-managed variation with no quantity, so
+        // tests that only exercise create/update routing need not register
+        // one — mirrors getProduct()'s own fallback.
+        return $this->variationsById[$productId][$variationId]
+            ?? ['id' => $variationId, 'manage_stock' => true, 'stock_quantity' => null];
     }
 
     public function createVariation(int $productId, array $payload): array
