@@ -9,6 +9,7 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Support\Facades\Storage;
 use Modules\ExportProdotti\Enums\ExportColumn;
 use Modules\ExportProdotti\Filament\Resources\ExportRecords\ExportRecordResource;
 use Modules\ExportProdotti\Jobs\RunProductExport;
@@ -62,9 +63,12 @@ class ListProducts extends ListRecords
 
     /**
      * "Esporta" — rendered next to the Filters / Columns controls in the page
-     * view. Opens a slide-over to pick the format and columns, then either
-     * streams the file back inline or (past the row threshold) queues a
-     * {@see RunProductExport} and sends the user to its report page.
+     * view. Opens a slide-over to pick the format and columns. Every export —
+     * inline or queued — gets an {@see ExportRecord}; only how it is *run*
+     * differs: past the row threshold it is queued via
+     * {@see RunProductExport} and the user is sent to its report page,
+     * otherwise {@see ExportRunner::run()} runs synchronously and the
+     * generated file is streamed back immediately.
      */
     public function exportAction(): Action
     {
@@ -110,18 +114,18 @@ class ListProducts extends ListRecords
                 $count = $this->exportMatchCount();
                 $filename = 'export-prodotti-'.now()->format('Ymd-His').'.'.$format;
 
-                if ($count > (int) config('exportprodotti.inline_max_rows', 1000)) {
-                    $record = ExportRecord::create([
-                        'user_id' => auth()->id(),
-                        'format' => $format,
-                        'columns' => $columns,
-                        'filters' => $filters,
-                        'sort' => $sort,
-                        'status' => 'pending',
-                        'total_rows' => $count,
-                        'original_filename' => $filename,
-                    ]);
+                $record = ExportRecord::create([
+                    'user_id' => auth()->id(),
+                    'format' => $format,
+                    'columns' => $columns,
+                    'filters' => $filters,
+                    'sort' => $sort,
+                    'status' => 'pending',
+                    'total_rows' => $count,
+                    'original_filename' => $filename,
+                ]);
 
+                if ($count > (int) config('exportprodotti.inline_max_rows', 1000)) {
                     RunProductExport::dispatch($record);
 
                     Notification::make()
@@ -134,21 +138,22 @@ class ListProducts extends ListRecords
                     return null;
                 }
 
-                $query = ExportRunner::query($filters);
+                app(ExportRunner::class)->run($record);
+                $record->refresh();
 
-                if ($sort !== null) {
-                    $query->orderBy($sort['column'], $sort['direction']);
+                if ($record->isFailed()) {
+                    Notification::make()
+                        ->title(__('pim.export.notify.failed'))
+                        ->danger()
+                        ->send();
+
+                    $this->redirect(ExportRecordResource::getUrl('view', ['record' => $record]));
+
+                    return null;
                 }
 
-                // openspout writes to this path; give it the right suffix and
-                // drop the empty placeholder tempnam() just created.
-                $path = tempnam(sys_get_temp_dir(), 'pimexport');
-                $target = $path.'.'.$format;
-                @rename($path, $target);
-
-                app(ExportRunner::class)->write($query, $columns, $format, $target);
-
-                return response()->download($target, $filename)->deleteFileAfterSend();
+                return Storage::disk(config('exportprodotti.disk'))
+                    ->download($record->stored_path, $record->original_filename);
             });
     }
 

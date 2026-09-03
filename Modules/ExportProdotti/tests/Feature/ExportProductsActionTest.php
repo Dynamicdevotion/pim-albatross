@@ -4,6 +4,7 @@ namespace Modules\ExportProdotti\Tests\Feature;
 
 use App\Models\User;
 use Filament\Facades\Filament;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -12,10 +13,12 @@ use Modules\ExportProdotti\Enums\ExportColumn;
 use Modules\ExportProdotti\Filament\Resources\ExportRecords\ExportRecordResource;
 use Modules\ExportProdotti\Jobs\RunProductExport;
 use Modules\ExportProdotti\Models\ExportRecord;
+use Modules\ExportProdotti\Support\ExportRunner;
 use Modules\Localization\Database\Seeders\LanguageSeeder;
 use Modules\Pricing\Models\PriceList;
 use Modules\Products\Filament\Resources\Products\Pages\ListProducts;
 use Modules\Products\Models\Product;
+use RuntimeException;
 use Tests\TestCase;
 
 class ExportProductsActionTest extends TestCase
@@ -42,7 +45,7 @@ class ExportProductsActionTest extends TestCase
         return $product;
     }
 
-    public function test_a_small_export_is_streamed_back_inline(): void
+    public function test_a_small_export_is_streamed_back_inline_and_still_leaves_a_report_record(): void
     {
         $this->product('A', 'Alpha');
         $this->product('B', 'Beta');
@@ -54,10 +57,19 @@ class ExportProductsActionTest extends TestCase
             ->assertFileDownloaded();
 
         Queue::assertNothingPushed();
-        $this->assertSame(0, ExportRecord::count());
+
+        $record = ExportRecord::query()->sole();
+
+        $this->assertSame('completed', $record->status);
+        $this->assertSame('csv', $record->format);
+        $this->assertSame(2, $record->total_rows);
+        $this->assertSame(2, $record->row_count);
+        $this->assertNotNull($record->stored_path);
+        $this->assertTrue(Storage::disk('local')->exists($record->stored_path));
+        $this->assertNotNull($record->finished_at);
     }
 
-    public function test_a_small_xlsx_export_is_streamed_back_inline(): void
+    public function test_a_small_xlsx_export_is_streamed_back_inline_and_still_leaves_a_report_record(): void
     {
         $this->product('A', 'Alpha');
 
@@ -65,7 +77,36 @@ class ExportProductsActionTest extends TestCase
             ->callAction('export', ['format' => 'xlsx', 'columns' => ['sku', 'name']])
             ->assertFileDownloaded();
 
-        $this->assertSame(0, ExportRecord::count());
+        $record = ExportRecord::query()->sole();
+
+        $this->assertSame('completed', $record->status);
+        $this->assertSame('xlsx', $record->format);
+        $this->assertNotNull($record->stored_path);
+        $this->assertTrue(Storage::disk('local')->exists($record->stored_path));
+    }
+
+    public function test_a_failed_inline_export_redirects_to_the_report_instead_of_downloading(): void
+    {
+        $this->product('A', 'Alpha');
+
+        $this->app->bind(ExportRunner::class, fn () => new class extends ExportRunner
+        {
+            public function write(Builder $query, array $columns, string $format, string $absolutePath): int
+            {
+                throw new RuntimeException('boom');
+            }
+        });
+
+        $component = Livewire::test(ListProducts::class)
+            ->callAction('export', ['format' => 'csv', 'columns' => ['sku', 'name']]);
+
+        $record = ExportRecord::query()->sole();
+
+        $this->assertSame('failed', $record->status);
+        $this->assertNotNull($record->error_message);
+        $this->assertNull($record->stored_path);
+
+        $component->assertRedirect(ExportRecordResource::getUrl('view', ['record' => $record]));
     }
 
     public function test_a_large_export_is_queued_and_redirects_to_its_report(): void

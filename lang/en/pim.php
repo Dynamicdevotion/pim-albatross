@@ -379,6 +379,7 @@ return [
         ],
         'notify' => [
             'queued' => 'Export started: the catalogue is large, processing continues in the background. You can follow its progress on this page.',
+            'failed' => 'Export failed. See the details on the export report page.',
         ],
         'status' => [
             'pending' => 'Queued',
