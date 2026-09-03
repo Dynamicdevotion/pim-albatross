@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# pim-project-git-hooks: pre-commit
+#
+# Guards against a bug this project has hit three times: a JS/CSS source
+# under Modules/*/resources/{js,css}/** gets edited and committed, but the
+# published copy under public/ (registered via FilamentAsset::register() in
+# each module's PanelPlugin) is never regenerated — so the live app keeps
+# serving the old file until someone remembers to run
+# `php artisan filament:assets` by hand.
+#
+# When the staged diff touches one of those sources, this hook runs that
+# command itself and stages whatever it regenerates under public/, so the
+# commit always carries a published copy that matches the source. If the
+# command fails, the commit is blocked instead of going through with a
+# stale/inconsistent public/ directory.
+#
+# Installed automatically by scripts/install-git-hooks.php (wired into
+# composer's post-autoload-dump) — see that file to reinstall by hand, and
+# README.md for the full explanation. This file itself is not run directly
+# by Git; only the copy at .git/hooks/pre-commit is.
+
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+changed_sources=$(git diff --cached --name-only --diff-filter=ACMR -- \
+    'Modules/*/resources/js/*' 'Modules/*/resources/css/*' || true)
+
+if [ -z "$changed_sources" ]; then
+    exit 0
+fi
+
+echo "pre-commit: asset JS/CSS modificati, rigenero le copie pubblicate:"
+echo "$changed_sources" | sed 's/^/  - /'
+
+before_snapshot=$(mktemp)
+after_snapshot=$(mktemp)
+assets_log=$(mktemp)
+trap 'rm -f "$before_snapshot" "$after_snapshot" "$assets_log"' EXIT
+
+git status --porcelain --untracked-files=all -- public/ > "$before_snapshot"
+
+if ! php artisan filament:assets > "$assets_log" 2>&1; then
+    echo "" >&2
+    echo "pre-commit: ERRORE — 'php artisan filament:assets' e' fallito. Commit bloccato." >&2
+    echo "Correggi l'errore sotto e riprova il commit (oppure 'git commit --no-verify' per saltare questo controllo, sconsigliato)." >&2
+    echo "--- output del comando ---" >&2
+    cat "$assets_log" >&2
+    exit 1
+fi
+
+git status --porcelain --untracked-files=all -- public/ > "$after_snapshot"
+
+# Only what changed *because of* the command above — never a blanket
+# `git add public/`, which would also stage unrelated pre-existing changes
+# under public/ that the developer hasn't chosen to commit yet.
+newly_dirty=$(grep -Fxv -f "$before_snapshot" "$after_snapshot" || true)
+
+if [ -n "$newly_dirty" ]; then
+    echo "pre-commit: aggiungo al commit gli asset pubblicati rigenerati:"
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        path=${line:3}
+        echo "  - $path"
+        git add -- "$path"
+    done <<< "$newly_dirty"
+else
+    echo "pre-commit: le copie pubblicate erano gia' allineate, nulla da aggiungere."
+fi
+
+exit 0
