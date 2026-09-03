@@ -158,4 +158,57 @@ class VariantsRelationManagerTest extends TestCase
             $parent->variants()->where('sku', 'TSHIRT-ROSSO-M')->sole()->taxonomyTerms()->pluck('taxonomy_terms.id')->all(),
         );
     }
+
+    // ---- bulk set stock and dimensions --------------------------------------
+
+    public function test_bulk_set_stock_and_dimensions_only_touches_filled_fields(): void
+    {
+        $parent = $this->variableWithName();
+        $a = Product::factory()->variantOf($parent)->create(['sku' => 'TSHIRT-A', 'stock' => 1, 'weight' => 1, 'length' => 1, 'width' => 1, 'height' => 1]);
+        $b = Product::factory()->variantOf($parent)->create(['sku' => 'TSHIRT-B', 'stock' => 2, 'weight' => 2, 'length' => 2, 'width' => 2, 'height' => 2]);
+
+        $this->manager($parent)
+            ->callTableBulkAction('bulkSetStockAndDimensions', [$a, $b], [
+                'stock' => '10',
+                'weight' => '2.5',
+                // length / width / height left blank -> untouched
+            ])
+            ->assertNotified(trans_choice('pim.notification.stock_dimensions_bulk_updated', 2, ['count' => 2]));
+
+        foreach ([$a, $b] as $variant) {
+            $fresh = $variant->fresh();
+            $this->assertSame(10, $fresh->stock);
+            $this->assertSame('2.500', (string) $fresh->weight);
+        }
+        $this->assertSame('1.00', (string) $a->fresh()->length);
+        $this->assertSame('2.00', (string) $b->fresh()->length);
+    }
+
+    public function test_bulk_set_stock_and_dimensions_never_excludes_anything_here(): void
+    {
+        // Unlike the equivalent bulk action on the main products list, every
+        // row in this table is already a `variant` — there is no `variable`
+        // container to filter out, so a plain "N updated" notification is
+        // the whole story.
+        $parent = $this->variableWithName();
+        $variant = Product::factory()->variantOf($parent)->create(['sku' => 'TSHIRT-C', 'stock' => 0]);
+
+        $this->manager($parent)
+            ->callTableBulkAction('bulkSetStockAndDimensions', [$variant], ['stock' => '7'])
+            ->assertNotified(trans_choice('pim.notification.stock_dimensions_bulk_updated', 1, ['count' => 1]));
+
+        $this->assertSame(7, $variant->fresh()->stock);
+    }
+
+    public function test_bulk_set_stock_and_dimensions_with_nothing_filled_warns_and_changes_nothing(): void
+    {
+        $parent = $this->variableWithName();
+        $variant = Product::factory()->variantOf($parent)->create(['sku' => 'TSHIRT-D', 'stock' => 3]);
+
+        $this->manager($parent)
+            ->callTableBulkAction('bulkSetStockAndDimensions', [$variant], [])
+            ->assertNotified(__('pim.notification.bulk_dimensions_nothing_to_set'));
+
+        $this->assertSame(3, $variant->fresh()->stock);
+    }
 }
