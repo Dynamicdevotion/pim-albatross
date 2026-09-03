@@ -25,6 +25,7 @@ return [
     'field' => [
         'name' => 'Nome',
         'sku' => 'SKU',
+        'barcode' => 'Codice a barre',
         'external_id' => 'ID esterno',
         'status' => 'Stato',
         'type' => 'Tipo',
@@ -38,6 +39,7 @@ return [
         'variant_values' => 'Valori da combinare',
         'description' => 'Descrizione',
         'slug' => 'Slug',
+        'internal_code' => 'Codice interno',
         'parent' => 'Genitore',
         'children' => 'Figli',
         'code' => 'Codice',
@@ -45,6 +47,7 @@ return [
         'active' => 'Attiva',
         'default' => 'Predefinito',
         'price' => 'Prezzo',
+        'sale_price' => 'Prezzo in offerta',
         'prices' => 'Prezzi',
         'price_list' => 'Listino',
         'price_min' => 'Prezzo min',
@@ -126,6 +129,9 @@ return [
 
     'helper' => [
         'slug_from_name' => 'Lascia vuoto per generarlo dal nome base.',
+        'slug_from_name_translated' => 'Lascia vuoto per generarlo dal nome in questa lingua.',
+        'internal_code' => 'Identificativo tecnico usato internamente (es. sincronizzazione WooCommerce, import); generato automaticamente dal nome, non modificabile.',
+        'sale_price' => 'Prezzo scontato mostrato al posto del prezzo pieno; lascia vuoto per nessuna offerta.',
         'language_code' => 'ISO 639-1, minuscolo (es. "it", "en").',
         'percent' => 'es. 10 per +10%, -15 per −15%. Vuoto copia i prezzi invariati.',
         'percent_short' => 'es. 10 per +10%, -15 per −15%.',
@@ -185,6 +191,7 @@ return [
         'variant_needs_parent' => 'Una variante deve appartenere a un prodotto variabile.',
         'only_variant_has_parent' => 'Solo una variante può avere un prodotto genitore.',
         'parent_not_variable' => 'Il prodotto genitore non è di tipo variabile.',
+        'slug_taken' => 'Questo slug è già in uso in questa lingua.',
     ],
 
     'tooltip' => [

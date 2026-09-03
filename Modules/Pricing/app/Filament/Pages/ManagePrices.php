@@ -251,7 +251,10 @@ class ManagePrices extends Page implements HasTable
      */
     public function gridHeaders(): array
     {
-        return $this->columnCatalogue() + ['price' => __('pim.field.price')];
+        return $this->columnCatalogue() + [
+            'price' => __('pim.field.price'),
+            'sale_price' => __('pim.field.sale_price'),
+        ];
     }
 
     /**
@@ -278,7 +281,7 @@ class ManagePrices extends Page implements HasTable
     }
 
     /**
-     * @return array<int, array{product_id: int, name: string, sku: string, status: string, price: string|null}>
+     * @return array<int, array{product_id: int, name: string, sku: string, status: string, price: string|null, sale_price: string|null}>
      */
     public function rows(): array
     {
@@ -291,13 +294,18 @@ class ManagePrices extends Page implements HasTable
             ])
             ->limit(self::ROW_CAP)
             ->get()
-            ->map(fn (Product $product): array => [
-                'product_id' => $product->id,
-                'name' => $this->rowLabel($product),
-                'sku' => $product->sku,
-                'status' => $product->status,
-                'price' => $product->prices->first()?->price,
-            ])
+            ->map(function (Product $product): array {
+                $price = $product->prices->first();
+
+                return [
+                    'product_id' => $product->id,
+                    'name' => $this->rowLabel($product),
+                    'sku' => $product->sku,
+                    'status' => $product->status,
+                    'price' => $price?->price,
+                    'sale_price' => $price?->sale_price,
+                ];
+            })
             ->all();
     }
 
@@ -360,34 +368,56 @@ class ManagePrices extends Page implements HasTable
     // ---- persistence from the grid ----------------------------------------
 
     /**
-     * @param  array<int, array{product_id: int, price: mixed}>  $changes
+     * Each change carries only the field(s) actually edited in that batch
+     * (`price` and/or `sale_price`) — editing one never blanks the other.
+     *
+     * @param  array<int, array{product_id: int, price?: mixed, sale_price?: mixed}>  $changes
      */
     public function saveCells(array $changes): void
     {
         DB::transaction(function () use ($changes): void {
             foreach ($changes as $change) {
-                $this->writePrice((int) $change['product_id'], $change['price'] ?? null);
+                $this->writePrice((int) $change['product_id'], $change);
             }
         });
     }
 
-    public function writePrice(int $productId, mixed $state): void
+    /**
+     * @param  array{price?: mixed, sale_price?: mixed}  $fields
+     */
+    public function writePrice(int $productId, array $fields): void
     {
-        $state = ($state === '' || $state === null) ? null : round((float) $state, 2);
+        if (array_key_exists('price', $fields)) {
+            $price = ($fields['price'] === '' || $fields['price'] === null) ? null : round((float) $fields['price'], 2);
 
-        if ($state === null) {
+            if ($price === null) {
+                // Clearing the price clears the whole row — a sale price
+                // never makes sense without a regular one to discount from.
+                ProductPrice::query()
+                    ->where('product_id', $productId)
+                    ->where('price_list_id', $this->priceListId)
+                    ->delete();
+
+                return;
+            }
+
+            ProductPrice::updateOrCreate(
+                ['product_id' => $productId, 'price_list_id' => $this->priceListId],
+                ['price' => $price],
+            );
+        }
+
+        if (array_key_exists('sale_price', $fields)) {
+            $salePrice = ($fields['sale_price'] === '' || $fields['sale_price'] === null)
+                ? null
+                : round((float) $fields['sale_price'], 2);
+
+            // No-op if there is no price row yet to attach a sale price to.
             ProductPrice::query()
                 ->where('product_id', $productId)
                 ->where('price_list_id', $this->priceListId)
-                ->delete();
-
-            return;
+                ->update(['sale_price' => $salePrice]);
         }
-
-        ProductPrice::updateOrCreate(
-            ['product_id' => $productId, 'price_list_id' => $this->priceListId],
-            ['price' => $state],
-        );
     }
 
     // ---- bulk actions -----------------------------------------------------

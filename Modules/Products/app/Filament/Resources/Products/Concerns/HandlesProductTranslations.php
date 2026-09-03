@@ -3,13 +3,16 @@
 namespace Modules\Products\Filament\Resources\Products\Concerns;
 
 use Modules\Localization\Models\Language;
+use Modules\Localization\Models\ProductTranslation;
 use Modules\Localization\Support\Locales;
+use Modules\Localization\Support\RichText;
+use Modules\Localization\Support\SlugGenerator;
 
 /**
  * Shared translation load/save logic for the Create and Edit product pages.
  *
  * The form keeps per-language content under the non-column `translations` key
- * (`translations.<code>.name` / `.description` / `.meta_title` /
+ * (`translations.<code>.name` / `.slug` / `.description` / `.meta_title` /
  * `.meta_description`); these helpers move that data in and out of the
  * product_translations table (keyed by `language_id`) around the record save.
  * Only currently-active languages are touched — rows for deactivated languages
@@ -20,7 +23,7 @@ trait HandlesProductTranslations
     /**
      * Translation form data pulled out of the record payload, keyed by code.
      *
-     * @var array<string, array{name?: string|null, description?: string|null, meta_title?: string|null, meta_description?: string|null}>
+     * @var array<string, array{name?: string|null, slug?: string|null, description?: string|null, meta_title?: string|null, meta_description?: string|null}>
      */
     protected array $translationData = [];
 
@@ -51,6 +54,7 @@ trait HandlesProductTranslations
 
             $data['translations'][$code] = [
                 'name' => $translation->name,
+                'slug' => $translation->slug,
                 'description' => $translation->description,
                 'meta_title' => $translation->meta_title,
                 'meta_description' => $translation->meta_description,
@@ -63,7 +67,9 @@ trait HandlesProductTranslations
     /**
      * Upsert one product_translations row per active language that has a name;
      * delete the row for any active language left without a name. The meta
-     * fields are optional — an empty one is stored as null.
+     * fields are optional — an empty one is stored as null. A blank slug is
+     * generated from the name (see resolveSlug()); a submitted one is
+     * sanitized and used as-is.
      */
     protected function saveTranslations(): void
     {
@@ -83,7 +89,8 @@ trait HandlesProductTranslations
                 ['language_id' => $language->id],
                 [
                     'name' => $name,
-                    'description' => $this->normalizeRichText($row['description'] ?? null),
+                    'slug' => $this->resolveSlug($row['slug'] ?? null, $name, $language),
+                    'description' => RichText::normalize($row['description'] ?? null),
                     'meta_title' => $this->nullableTrim($row['meta_title'] ?? null),
                     'meta_description' => $this->nullableTrim($row['meta_description'] ?? null),
                 ],
@@ -91,25 +98,27 @@ trait HandlesProductTranslations
         });
     }
 
+    /**
+     * The submitted slug (sanitized), or one derived from the name when left
+     * blank — always unique within this language. A manually-typed slug is
+     * expected to already be unique (the form validates it live); this still
+     * runs it through the same dedup loop as a safety net.
+     */
+    protected function resolveSlug(?string $submitted, string $name, Language $language): string
+    {
+        $base = $this->nullableTrim($submitted) ?? $name;
+
+        return SlugGenerator::unique($base, fn (string $candidate): bool => ProductTranslation::query()
+            ->where('language_id', $language->id)
+            ->where('slug', $candidate)
+            ->where('product_id', '!=', $this->record->id)
+            ->exists());
+    }
+
     protected function nullableTrim(?string $value): ?string
     {
         $value = trim((string) $value);
 
         return $value === '' ? null : $value;
-    }
-
-    /**
-     * An empty RichEditor dehydrates to markup like `<p></p>`; treat any
-     * content that has no visible text as null.
-     */
-    protected function normalizeRichText(?string $html): ?string
-    {
-        if ($html === null) {
-            return null;
-        }
-
-        $text = trim(strip_tags(str_replace(['&nbsp;', "\u{00A0}"], ' ', $html)));
-
-        return $text === '' ? null : $html;
     }
 }

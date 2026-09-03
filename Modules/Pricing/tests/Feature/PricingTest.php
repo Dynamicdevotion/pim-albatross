@@ -143,6 +143,45 @@ class PricingTest extends TestCase
         $this->assertDatabaseCount('product_prices', 1);
     }
 
+    public function test_manage_prices_grid_saves_a_sale_price_alongside_the_price(): void
+    {
+        $list = PriceList::create(['name' => 'Std', 'is_default' => true]);
+        $a = $this->product('Tavolo', 'T-1');
+
+        $component = Livewire::test(ManagePrices::class)->set('priceListId', $list->id);
+
+        $component->call('saveCells', [
+            ['product_id' => $a->id, 'price' => '100', 'sale_price' => '80'],
+        ]);
+        $this->assertDatabaseHas('product_prices', [
+            'product_id' => $a->id, 'price_list_id' => $list->id, 'price' => 100.00, 'sale_price' => 80.00,
+        ]);
+
+        // editing only the price in a later batch must not blank the sale price
+        $component->call('saveCells', [['product_id' => $a->id, 'price' => '90']]);
+        $this->assertDatabaseHas('product_prices', [
+            'product_id' => $a->id, 'price_list_id' => $list->id, 'price' => 90.00, 'sale_price' => 80.00,
+        ]);
+
+        // editing only the sale price must not touch the price
+        $component->call('saveCells', [['product_id' => $a->id, 'sale_price' => '70']]);
+        $this->assertDatabaseHas('product_prices', [
+            'product_id' => $a->id, 'price_list_id' => $list->id, 'price' => 90.00, 'sale_price' => 70.00,
+        ]);
+    }
+
+    public function test_manage_prices_grid_ignores_a_sale_price_with_no_price_row_to_attach_to(): void
+    {
+        $list = PriceList::create(['name' => 'Std', 'is_default' => true]);
+        $a = $this->product('Tavolo', 'T-1');
+
+        Livewire::test(ManagePrices::class)
+            ->set('priceListId', $list->id)
+            ->call('saveCells', [['product_id' => $a->id, 'sale_price' => '70']]);
+
+        $this->assertDatabaseCount('product_prices', 0);
+    }
+
     public function test_manage_prices_rows_respect_search_price_and_taxonomy_filters(): void
     {
         $list = PriceList::create(['name' => 'Std', 'is_default' => true]);
@@ -306,6 +345,31 @@ class PricingTest extends TestCase
         $product = Product::query()->where('sku', 'PR-FORM')->sole();
         $this->assertEqualsCanonicalizing([$a->id, $b->id], $product->prices->pluck('price_list_id')->all());
         $this->assertSame('11.00', (string) $product->prices->firstWhere('price_list_id', $a->id)->price);
+    }
+
+    public function test_product_form_writes_a_sale_price_alongside_the_price(): void
+    {
+        $a = PriceList::create(['name' => 'A', 'is_default' => true]);
+
+        $component = Livewire::test(CreateProduct::class)
+            ->fillForm([
+                'sku' => 'PR-SALE',
+                'status' => 'draft',
+                'translations' => ['it' => ['name' => 'Scontato']],
+            ]);
+
+        $rows = $component->get('data.prices');
+        $key = array_key_first($rows);
+        $component
+            ->set("data.prices.{$key}.price", '50.00')
+            ->set("data.prices.{$key}.sale_price", '39.99');
+
+        $component->call('create')->assertHasNoFormErrors();
+
+        $product = Product::query()->where('sku', 'PR-SALE')->sole();
+        $price = $product->prices->firstWhere('price_list_id', $a->id);
+        $this->assertSame('50.00', (string) $price->price);
+        $this->assertSame('39.99', (string) $price->sale_price);
     }
 
     public function test_product_form_edits_prices_creating_updating_and_clearing(): void

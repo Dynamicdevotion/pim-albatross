@@ -31,10 +31,11 @@ class ProductPriceMatrix
 
     /**
      * The fixed-row editor state: one row per active price list, carrying the
-     * product's current price in that list or null when it has none. Passing no
-     * product (or an unsaved one) yields every row empty — the create-form seed.
+     * product's current price (and sale price) in that list or null when it
+     * has none. Passing no product (or an unsaved one) yields every row
+     * empty — the create-form seed.
      *
-     * @return list<array{price_list_id: int, price_list_label: string, price: string|null}>
+     * @return list<array{price_list_id: int, price_list_label: string, price: string|null, sale_price: string|null}>
      */
     public static function readItems(?Product $product = null): array
     {
@@ -43,21 +44,29 @@ class ProductPriceMatrix
             : collect();
 
         return static::activeLists()
-            ->map(fn (PriceList $list): array => [
-                'price_list_id' => $list->id,
-                'price_list_label' => $list->name,
-                'price' => $prices->firstWhere('price_list_id', $list->id)?->price,
-            ])
+            ->map(function (PriceList $list) use ($prices): array {
+                $price = $prices->firstWhere('price_list_id', $list->id);
+
+                return [
+                    'price_list_id' => $list->id,
+                    'price_list_label' => $list->name,
+                    'price' => $price?->price,
+                    'sale_price' => $price?->sale_price,
+                ];
+            })
             ->all();
     }
 
     /**
-     * Persist the editor rows for one product. A non-empty price is upserted;
-     * an empty one removes any existing row for that (product, list) — so
+     * Persist the editor rows for one product. A non-empty price is upserted
+     * along with whatever sale price came with it (blank -> null, a plain
+     * discount price — see the `sale_price` column's docblock for the
+     * WooCommerce mapping this exists for); an empty price removes any
+     * existing row for that (product, list) entirely, sale price included —
      * clearing a field deletes the price rather than storing a null. Rows for
      * lists that are not currently active are ignored.
      *
-     * @param  iterable<array{price_list_id?: int|string|null, price?: mixed}>  $rows
+     * @param  iterable<array{price_list_id?: int|string|null, price?: mixed, sale_price?: mixed}>  $rows
      */
     public static function write(Product $product, iterable $rows): void
     {
@@ -80,9 +89,12 @@ class ProductPriceMatrix
                     continue;
                 }
 
+                $rawSale = $row['sale_price'] ?? null;
+                $salePrice = ($rawSale === '' || $rawSale === null) ? null : round((float) $rawSale, 2);
+
                 $product->prices()->updateOrCreate(
                     ['price_list_id' => $listId],
-                    ['price' => $price],
+                    ['price' => $price, 'sale_price' => $salePrice],
                 );
             }
         });

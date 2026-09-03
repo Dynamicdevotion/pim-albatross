@@ -27,7 +27,7 @@ class TaxonomiesTable
                             ->where('name', 'like', "%{$search}%"),
                     )),
                 TextColumn::make('slug')
-                    ->label(__('pim.field.slug'))
+                    ->label(__('pim.field.internal_code'))
                     ->searchable()
                     ->toggleable(),
                 TextColumn::make('terms_count')

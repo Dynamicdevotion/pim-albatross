@@ -30,6 +30,7 @@ class ProductPricesTable
             ->table([
                 TableColumn::make(__('pim.field.price_list')),
                 TableColumn::make(__('pim.field.price')),
+                TableColumn::make(__('pim.field.sale_price')),
             ])
             ->schema([
                 Hidden::make('price_list_id'),
@@ -44,6 +45,14 @@ class ProductPricesTable
                     ->maxValue(99999999.99)
                     ->extraInputAttributes(['step' => '0.01'])
                     ->placeholder('—'),
+                TextInput::make('sale_price')
+                    ->hiddenLabel()
+                    ->numeric()
+                    ->minValue(0)
+                    ->maxValue(99999999.99)
+                    ->extraInputAttributes(['step' => '0.01'])
+                    ->placeholder('—')
+                    ->helperText(__('pim.helper.sale_price')),
             ])
             ->default(fn (): array => ProductPriceMatrix::readItems());
     }

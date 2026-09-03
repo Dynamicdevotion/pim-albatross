@@ -22,6 +22,8 @@ class TaxonomyTranslation extends Model
         'language_id',
         'locale',
         'name',
+        'slug',
+        'description',
     ];
 
     public function taxonomy(): BelongsTo

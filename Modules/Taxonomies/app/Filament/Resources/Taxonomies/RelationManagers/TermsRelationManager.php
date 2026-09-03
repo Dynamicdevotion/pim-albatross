@@ -2,11 +2,13 @@
 
 namespace Modules\Taxonomies\Filament\Resources\Taxonomies\RelationManagers;
 
+use Closure;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -16,10 +18,12 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 use Modules\Localization\Filament\Concerns\HandlesTranslatableName;
 use Modules\Localization\Models\Language;
 use Modules\Localization\Support\Locales;
 use Modules\Taxonomies\Models\TaxonomyTerm;
+use Modules\Taxonomies\Models\TaxonomyTermTranslation;
 
 class TermsRelationManager extends RelationManager
 {
@@ -39,6 +43,18 @@ class TermsRelationManager extends RelationManager
         return ['taxonomy_id' => $this->getOwnerRecord()->getKey()];
     }
 
+    /**
+     * The per-language translated slug is unique within this taxonomy, not
+     * globally — mirroring the internal slug's own scoping.
+     */
+    protected function scopeTranslationSlugQuery(Builder $query): Builder
+    {
+        return $query->whereHas(
+            'term',
+            fn (Builder $q): Builder => $q->where('taxonomy_id', $this->getOwnerRecord()->getKey()),
+        );
+    }
+
     public function form(Schema $schema): Schema
     {
         return $schema
@@ -53,12 +69,38 @@ class TermsRelationManager extends RelationManager
                                 ->label(__('pim.field.name'))
                                 ->maxLength(255)
                                 ->required($language->is_base),
+                            TextInput::make("translations.{$language->code}.slug")
+                                ->label(__('pim.field.slug'))
+                                ->maxLength(255)
+                                ->helperText(__('pim.helper.slug_from_name_translated'))
+                                ->rule(fn (?TaxonomyTerm $record): Closure => function (string $attribute, $value, Closure $fail) use ($language, $record): void {
+                                    $value = trim((string) $value);
+
+                                    if ($value === '') {
+                                        return;
+                                    }
+
+                                    $taken = $this->scopeTranslationSlugQuery(
+                                        TaxonomyTermTranslation::query()
+                                            ->where('language_id', $language->id)
+                                            ->where('slug', Str::slug($value))
+                                            ->when($record, fn (Builder $q, TaxonomyTerm $record): Builder => $q->where('taxonomy_term_id', '!=', $record->id))
+                                    )->exists();
+
+                                    if ($taken) {
+                                        $fail(__('pim.validation.slug_taken'));
+                                    }
+                                }),
+                            RichEditor::make("translations.{$language->code}.description")
+                                ->label(__('pim.field.description')),
                         ]))
                         ->all()),
                 TextInput::make('slug')
-                    ->label(__('pim.field.slug'))
+                    ->label(__('pim.field.internal_code'))
                     ->maxLength(255)
-                    ->helperText(__('pim.helper.slug_from_name')),
+                    ->disabled()
+                    ->dehydrated()
+                    ->helperText(__('pim.helper.internal_code')),
                 Select::make('parent_id')
                     ->label(__('pim.field.parent'))
                     ->searchable()
@@ -95,7 +137,7 @@ class TermsRelationManager extends RelationManager
                     ->label(__('pim.field.parent'))
                     ->placeholder('—'),
                 TextColumn::make('slug')
-                    ->label(__('pim.field.slug'))
+                    ->label(__('pim.field.internal_code'))
                     ->toggleable(),
                 TextColumn::make('children_count')
                     ->label(__('pim.field.children')),
