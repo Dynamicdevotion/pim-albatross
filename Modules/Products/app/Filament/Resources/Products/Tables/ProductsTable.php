@@ -188,12 +188,130 @@ class ProductsTable
                                 ->send();
                         })
                         ->deselectRecordsAfterCompletion(),
+                    self::bulkChangeStatusAction(),
+                    self::bulkSetStockAndDimensionsAction(),
                     // Extra bulk actions contributed by other modules
                     // (e.g. WooSync), if any.
                     ...ProductRowActions::bulk(),
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * Sets draft/active/archived on every selected product. One `update()`
+     * call per model (never a mass query) so the same Eloquent `saving`/
+     * `saved` events fire as editing one product at a time — WooSyncRunner's
+     * archived-goes-to-trash behaviour reads `status` on its own next run
+     * regardless of how it got there, but this keeps any status-triggered
+     * hook (present or future) behaving identically for a bulk change.
+     */
+    protected static function bulkChangeStatusAction(): BulkAction
+    {
+        return BulkAction::make('bulkChangeStatus')
+            ->label(__('pim.action.bulk_change_status'))
+            ->icon('heroicon-o-flag')
+            ->schema([
+                Select::make('status')
+                    ->label(__('pim.field.status'))
+                    ->required()
+                    ->native(false)
+                    ->options([
+                        'draft' => __('pim.option.status.draft'),
+                        'active' => __('pim.option.status.active'),
+                        'archived' => __('pim.option.status.archived'),
+                    ]),
+            ])
+            ->action(function (Collection $records, array $data): void {
+                $records->each(fn (Product $product) => $product->update(['status' => $data['status']]));
+
+                Notification::make()
+                    ->title(__('pim.notification.status_bulk_updated', [
+                        'count' => $records->count(),
+                        'status' => __('pim.option.status.'.$data['status']),
+                    ]))
+                    ->success()
+                    ->send();
+            })
+            ->deselectRecordsAfterCompletion();
+    }
+
+    /**
+     * Sets stock/weight/length/width/height on a selection — a field left
+     * blank in the form is not touched on any record (same "blank means
+     * leave it alone" rule as the per-list price editors). Variable
+     * containers never carry these fields of their own (enforced by
+     * Product's saving guard), so they are silently excluded rather than
+     * failing the whole action; the closing notification says how many.
+     */
+    protected static function bulkSetStockAndDimensionsAction(): BulkAction
+    {
+        return BulkAction::make('bulkSetStockAndDimensions')
+            ->label(__('pim.action.bulk_set_stock_and_dimensions'))
+            ->icon('heroicon-o-cube')
+            ->modalDescription(__('pim.helper.bulk_dimensions_blank_skips'))
+            ->schema([
+                TextInput::make('stock')
+                    ->label(__('pim.field.stock'))
+                    ->numeric()
+                    ->minValue(0),
+                TextInput::make('weight')
+                    ->label(__('pim.field.weight'))
+                    ->numeric()
+                    ->minValue(0)
+                    ->suffix('kg'),
+                TextInput::make('length')
+                    ->label(__('pim.field.length'))
+                    ->numeric()
+                    ->minValue(0)
+                    ->suffix('cm'),
+                TextInput::make('width')
+                    ->label(__('pim.field.width'))
+                    ->numeric()
+                    ->minValue(0)
+                    ->suffix('cm'),
+                TextInput::make('height')
+                    ->label(__('pim.field.height'))
+                    ->numeric()
+                    ->minValue(0)
+                    ->suffix('cm'),
+            ])
+            ->action(function (Collection $records, array $data): void {
+                $fields = collect($data)
+                    ->only(['stock', 'weight', 'length', 'width', 'height'])
+                    ->filter(fn (mixed $value): bool => filled($value))
+                    ->all();
+
+                if ($fields === []) {
+                    Notification::make()
+                        ->warning()
+                        ->title(__('pim.notification.bulk_dimensions_nothing_to_set'))
+                        ->send();
+
+                    return;
+                }
+
+                [$variable, $applicable] = $records->partition(fn (Product $product): bool => $product->isVariable());
+
+                $applicable->each(fn (Product $product) => $product->update($fields));
+
+                $title = trans_choice(
+                    'pim.notification.stock_dimensions_bulk_updated',
+                    $applicable->count(),
+                    ['count' => $applicable->count()],
+                );
+
+                if ($variable->isNotEmpty()) {
+                    $title .= ', '.trans_choice(
+                        'pim.notification.stock_dimensions_bulk_excluded',
+                        $variable->count(),
+                        ['count' => $variable->count()],
+                    );
+                }
+
+                Notification::make()->title($title)->success()->send();
+            })
+            ->deselectRecordsAfterCompletion();
     }
 
     /**
