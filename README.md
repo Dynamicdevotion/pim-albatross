@@ -547,9 +547,12 @@ Reusable per-user snapshots of a screen's filters + visible columns.
 
 ## ImportGestionali module
 
-Imports **simple** products from a CSV / Excel export with a visual column
-mapping. Simple products only (no variants) and single-list pricing; a column
-can also be mapped to a taxonomy to link its terms.
+Imports products from a CSV / Excel export with a visual column mapping.
+Handles **simple** products and, through the optional **"Codice Padre"**
+(parent SKU) column, **variable** products — a container plus its variants.
+Single-list pricing; a column can also be mapped to a taxonomy to link its
+terms (the same mechanism carries a variant's distinguishing attributes,
+e.g. Colour / Size).
 
 Structure (`Modules/ImportGestionali/`):
 
@@ -559,7 +562,7 @@ app/
 │   ├── ImportGestionaliPanelPlugin.php       # discoverPages + discoverResources
 │   ├── Pages/ImportProducts.php              # the 3-step wizard
 │   └── Resources/ImportRecords/              # read-only run history + report page
-├── Enums/TargetField.php                     # the 12 fixed fields: sku / name / description / price / stock / weight / length / width / height / status / image_url / gallery_urls
+├── Enums/TargetField.php                     # the 13 fixed fields: sku / parent_sku / name / description / price / stock / weight / length / width / height / status / image_url / gallery_urls
 ├── Jobs/RunProductImport.php                 # queued run for large files
 ├── Models/ImportRecord.php                   # one import run + its outcome (+ the taxonomy toggles)
 ├── Console/PruneImportFilesCommand.php       # importgestionali:prune-files
@@ -568,18 +571,20 @@ app/
     ├── FieldGuesser.php                      # header → target, it/en synonyms (+ exact taxonomy-name match)
     ├── MappingTarget.php                     # the `taxonomy:{id}` convention: parsing, labels, grouped Select options
     ├── RowMapper.php                         # mapping + positional row → [target => value]
-    ├── ProductRowImporter.php                # one row → created | updated | skipped(reason); dryRun
+    ├── ProductRowImporter.php                # one row → created | updated | skipped(reason); import() simple, importParent()/importVariant() for variables; dryRun
+    ├── VariantImportPlan.php                 # pass 1: pure classification of each row → simple | container | variant
     ├── TaxonomyTermResolver.php              # term names → ids within one taxonomy, create-on-miss, per-run cache
     ├── TaxonomyResolution.php                # per-taxonomy match outcome (found / created / will_create / missing / gone)
-    ├── ImportRunner.php                      # stream the file, keep the report current
+    ├── ImportRunner.php                      # stream the file (single pass), or two-pass when a parent_sku column is mapped; keep the report current
     ├── ImageFetcher.php                      # download an image_url / gallery_urls entry (streamed, capped)
     ├── RowOutcome.php  /  FileShape.php  /  FetchedImage.php   # small value objects
     ├── ImageFetchException.php               # per-image failure → a report note, not a skip
     └── UnreadableImportFile.php              # translated, user-safe file-level failure
-config/config.php                             # inline_max_rows, max_file_mb, issues_cap, preview_rows, disk, prune_days, image_timeout
+config/config.php                             # inline_max_rows, inline_max_rows_variants, max_file_mb, issues_cap, preview_rows, disk, prune_days, image_timeout
 database/migrations/
 ├── 2026_08_28_100000_create_import_records_table.php
 └── 2026_09_01_000000_add_taxonomy_toggles_to_import_records.php   # create_missing_terms, replace_taxonomy_terms
+resources/samples/prodotti_gioielleria_test.xlsx (+ .csv)          # customer-facing model file, with a populated "Codice Padre" column
 ```
 
 ### The wizard (`/admin/import-prodotti`, "Import" nav group)
@@ -591,13 +596,14 @@ database/migrations/
    step (see below).
 2. **Map the columns** — one `Select` per file column (`mapping.{index}`),
    pre-filled by `FieldGuesser` from the header. The options are grouped:
-   *Product fields* (the 12 `TargetField` values) and *Taxonomies* — one entry
-   per existing taxonomy, `taxonomy:{id}` (see `MappingTarget`), built from
-   `Taxonomy::all()` at render time. Plus three toggles (all default off):
-   **"Update products that already exist"**, **"Create missing terms
-   automatically"**, **"Replace existing terms for the mapped taxonomies"**.
-   On *Next*: exactly one column must map to `sku`, and no target may be mapped
-   twice (mapping two columns to the same taxonomy is the same error).
+   *Product fields* (the 13 `TargetField` values, `parent_sku` = "Codice Padre")
+   and *Taxonomies* — one entry per existing taxonomy, `taxonomy:{id}` (see
+   `MappingTarget`), built from `Taxonomy::all()` at render time. Plus three
+   toggles (all default off): **"Update products that already exist"**,
+   **"Create missing terms automatically"**, **"Replace existing terms for the
+   mapped taxonomies"**. On *Next*: exactly one column must map to `sku`, no
+   target may be mapped twice (mapping two columns to the same taxonomy is the
+   same error), and if `parent_sku` is mapped then `name` must be too.
 3. **Preview** — the first `preview_rows` (10) rows run through
    `ProductRowImporter` in **`dryRun`** mode and are shown with their expected
    outcome (*will be created* / *will update the existing one* / *skipped —
@@ -607,11 +613,15 @@ database/migrations/
 
 | | |
 |---|---|
-| ≤ `inline_max_rows` (300) rows **and** no image column mapped | runs inline in the confirm request; redirects to a finished report |
-| > 300 rows **or** an image column mapped | `RunProductImport` is queued; the report page polls (`wire:poll`) until done |
+| ≤ `inline_max_rows` (300) rows — or ≤ `inline_max_rows_variants` (**100**) when a `parent_sku` column is mapped — **and** no image column mapped | runs inline in the confirm request; redirects to a finished report |
+| over that row count **or** an image column mapped | `RunProductImport` is queued; the report page polls (`wire:poll`) until done |
 
 An image column means one HTTP download per row, so it always goes to the queue
-regardless of size.
+regardless of size. A `parent_sku` column turns on the two-pass variant
+algorithm (see below), which costs ~1.5–2× per row and buffers every mapped row
+in memory, so it gets the lower inline ceiling (measured ~85 rows/s vs ~135 for
+the flat path on in-memory SQLite; a 10 000-row variant file ≈ 2 min, well
+inside the queued job's 1800 s timeout).
 
 ### Matching and the "update existing" toggle
 
@@ -667,6 +677,48 @@ links the resolved terms through the existing `product_taxonomy_term` pivot.
   non trovato`), computed by the same `dryRun` path; it never writes.
 - Both toggles are stored on the `ImportRecord` so a queued run behaves the same.
 
+### Variable products (`parent_sku` / "Codice Padre" column)
+
+Mapping a column to `parent_sku` switches `ImportRunner` from the single
+streaming pass to a **two-pass** algorithm. Row order in the file is irrelevant
+— a variant may sit above its parent, or the parent may have no row of its own.
+
+- **Pass 1** (`VariantImportPlan`, pure, no queries): every row is classified as
+  `simple` (empty `parent_sku`, no one references its SKU), `container` (empty
+  `parent_sku`, another row names its SKU) or `variant of X` (`parent_sku` = X).
+  A 2nd top-level row for an already-seen SKU is a `sku_dup_in_file` skip; when
+  several variant rows name the same parent, the parent's own cells come from
+  the **first** row that defines it and later references contribute only the link.
+- **Pass 2a** — top-level rows in file order: simple products through the normal
+  `import()`; containers through `importParent()`.
+- **Pass 2b** — variant rows in file order through `importVariant()`, wired to
+  the container built in 2a. A variant carries its **own** price, stock,
+  dimensions and taxonomy terms; if its `name` cell is empty it inherits the
+  container's translations (`VariantGenerator::copyTranslations`, the same as the
+  admin's "Generate variants").
+
+**A container carries no price, stock or dimensions.** When a row references a
+SKU that already exists as a **simple** product, `importParent()` converts it:
+`type` → `variable` (the model's `saving` hook nulls `stock` + the four
+dimension columns), and its `product_prices` rows are **deleted** in the same
+transaction — a container has neither a price field in the form nor a row in the
+price grid. The conversion is reported (*"riga N: «X» esisteva come prodotto
+semplice ed è stato convertito…"*). It only happens with **"update existing
+products" on**; with it off the container row is skipped
+(`parent_exists_update_off`) and its variants cascade to a skip, exactly like a
+plain `sku_exists`.
+
+Other parent problems (all report notes, the rest of the file still imports):
+`parent_not_found` (referenced SKU is neither a row nor an existing product),
+`parent_is_variant` (the referenced SKU is itself a variant — nested variants
+are not supported), `variant_sku_conflict` (a variant row's SKU already belongs
+to a non-variant product).
+
+`resources/samples/prodotti_gioielleria_test.xlsx` (with a `.csv` twin used by
+the tests) is the customer-facing model file: simple products, plus a ring in
+three sizes and a bracelet in two, with the container rows deliberately out of
+order.
+
 ### File-level failures vs row-level problems
 
 **File-level** (raised as one translated `UnreadableImportFile`, shown at the
@@ -683,8 +735,11 @@ relevant wizard step, nothing is imported):
 a **skip** (the whole row is not imported) — SKU missing, SKU duplicated within
 the file, SKU already exists (toggle off), name missing on a new product, a
 numeric field that is not a number or is negative, stock not a whole number, an
-unrecognised `status`; or a **note** on a row that *was* imported — an image URL
-that would not download, a taxonomy term name that was not found.
+unrecognised `status`, or a variant whose parent could not be built
+(`parent_not_found` / `parent_is_variant` / `parent_exists_update_off` /
+`variant_sku_conflict`); or a **note** on a row that *was* imported — an image
+URL that would not download, a taxonomy term name that was not found, a
+simple→variable conversion, a variant imported without a name.
 
 ### Report
 

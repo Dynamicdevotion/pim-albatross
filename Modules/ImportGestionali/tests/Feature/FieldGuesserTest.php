@@ -20,6 +20,9 @@ class FieldGuesserTest extends TestCase
             ['Codice', 'sku'],
             ['SKU', 'sku'],
             ['Codice Articolo', 'sku'],
+            ['Codice Padre', 'parent_sku'],
+            ['SKU Padre', 'parent_sku'],
+            ['Parent SKU', 'parent_sku'],
             ['Nome', 'name'],
             ['Descrizione', 'name'],
             ['Descrizione estesa', 'description'],
@@ -42,5 +45,14 @@ class FieldGuesserTest extends TestCase
         $this->assertSame('', $mapping[1], 'sku is already taken by the first column');
         $this->assertSame('name', $mapping[2]);
         $this->assertSame('price', $mapping[3]);
+    }
+
+    public function test_for_header_keeps_sku_and_parent_sku_apart(): void
+    {
+        $mapping = FieldGuesser::forHeader(['Codice', 'Codice Padre', 'Nome']);
+
+        $this->assertSame('sku', $mapping[0]);
+        $this->assertSame('parent_sku', $mapping[1]);
+        $this->assertSame('name', $mapping[2]);
     }
 }

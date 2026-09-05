@@ -162,4 +162,53 @@ class ImportProductsPageTest extends TestCase
         Queue::assertPushed(RunProductImport::class);
         $this->assertSame('pending', ImportRecord::sole()->status);
     }
+
+    public function test_mapping_parent_sku_without_a_name_column_is_rejected(): void
+    {
+        $page = Livewire::test(ImportProducts::class)
+            ->set('data.mapping', [0 => 'sku', 1 => 'parent_sku', 2 => 'price'])
+            ->instance();
+
+        $this->expectException(ValidationException::class);
+        $page->assertMappingValid();
+    }
+
+    public function test_a_small_variant_import_runs_inline(): void
+    {
+        $csv = "Codice;Codice Padre;Nome;Prezzo\n"
+            ."BR;;Bracciale;\n"
+            ."BR-S;BR;Bracciale S;99\n"
+            ."BR-M;BR;Bracciale M;109\n";
+
+        Livewire::test(ImportProducts::class)
+            ->set('data.file', UploadedFile::fake()->createWithContent('small-variants.csv', $csv))
+            ->set('data.mapping', [0 => 'sku', 1 => 'parent_sku', 2 => 'name', 3 => 'price'])
+            ->call('import')
+            ->assertRedirect();
+
+        $record = ImportRecord::sole();
+        $this->assertSame('completed', $record->status);
+        $this->assertSame(3, $record->created_count);
+        $this->assertSame('variable', Product::where('sku', 'BR')->sole()->type->value);
+    }
+
+    public function test_a_variant_import_over_100_rows_is_queued_even_though_under_300(): void
+    {
+        Queue::fake();
+
+        $csv = "Codice;Codice Padre;Nome\n";
+        for ($i = 1; $i <= 150; $i++) {
+            $csv .= "SKU{$i};;Prodotto {$i}\n";
+        }
+
+        Livewire::test(ImportProducts::class)
+            ->set('data.file', UploadedFile::fake()->createWithContent('mid-variants.csv', $csv))
+            ->set('data.mapping', [0 => 'sku', 1 => 'parent_sku', 2 => 'name'])
+            ->call('import')
+            ->assertRedirect();
+
+        Queue::assertPushed(RunProductImport::class);
+        $this->assertSame('pending', ImportRecord::sole()->status);
+        $this->assertSame(150, ImportRecord::sole()->total_rows);
+    }
 }

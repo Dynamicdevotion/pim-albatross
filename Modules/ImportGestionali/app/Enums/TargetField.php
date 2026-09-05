@@ -4,11 +4,16 @@ namespace Modules\ImportGestionali\Enums;
 
 /**
  * A field of the product record that an import column can be mapped to.
- * This first pass covers only plain "simple" products.
+ *
+ * Covers "simple" products and — through {@see ParentSku} — variable products:
+ * a row whose `parent_sku` cell is empty is a product of its own (and becomes
+ * the variable container if other rows reference it), a row with `parent_sku`
+ * filled is a variant of the product with that SKU.
  */
 enum TargetField: string
 {
     case Sku = 'sku';
+    case ParentSku = 'parent_sku';
     case Name = 'name';
     case Description = 'description';
     case Price = 'price';

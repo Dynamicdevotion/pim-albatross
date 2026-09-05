@@ -11,6 +11,12 @@ namespace Modules\ImportGestionali\Support;
  *
  * `taxonomies` carries the per-taxonomy resolution ({@see TaxonomyResolution})
  * so the preview can show the expected term matches.
+ *
+ * `productId` is set only for a variable-container row, so the two-pass
+ * variant importer can wire the child variants to it. `UNCHANGED` is that
+ * same case when the container already existed and the "update existing"
+ * toggle is off: the container is reused as-is (variants still attach) and
+ * nothing is counted.
  */
 final readonly class RowOutcome
 {
@@ -19,6 +25,8 @@ final readonly class RowOutcome
     public const UPDATED = 'updated';
 
     public const SKIPPED = 'skipped';
+
+    public const UNCHANGED = 'unchanged';
 
     /**
      * @param  list<string>  $warnings
@@ -30,6 +38,8 @@ final readonly class RowOutcome
         public ?string $reason = null,
         public array $warnings = [],
         public array $taxonomies = [],
+        public ?int $productId = null,
+        public ?string $code = null,
     ) {}
 
     /**
@@ -48,9 +58,19 @@ final readonly class RowOutcome
         return new self(self::UPDATED, $line, null, $warnings);
     }
 
-    public static function skipped(int $line, string $reason): self
+    /**
+     * `$code` is an optional machine-readable tag (never shown to the user)
+     * that lets {@see ImportRunner} tell apart the ways a parent group can be
+     * blocked and phrase the per-variant report line accordingly.
+     */
+    public static function skipped(int $line, string $reason, ?string $code = null): self
     {
-        return new self(self::SKIPPED, $line, $reason);
+        return new self(self::SKIPPED, $line, $reason, [], [], null, $code);
+    }
+
+    public static function unchanged(int $line, ?int $productId = null): self
+    {
+        return new self(self::UNCHANGED, $line, null, [], [], $productId);
     }
 
     /**
@@ -58,7 +78,12 @@ final readonly class RowOutcome
      */
     public function withTaxonomies(array $taxonomies): self
     {
-        return new self($this->action, $this->line, $this->reason, $this->warnings, $taxonomies);
+        return new self($this->action, $this->line, $this->reason, $this->warnings, $taxonomies, $this->productId, $this->code);
+    }
+
+    public function withProductId(?int $productId): self
+    {
+        return new self($this->action, $this->line, $this->reason, $this->warnings, $this->taxonomies, $productId, $this->code);
     }
 
     public function isSkip(): bool

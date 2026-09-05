@@ -16,6 +16,10 @@ final class FieldGuesser
      * @var array<string, list<string>>
      */
     private const SYNONYMS = [
+        // Checked before `sku` on purpose: a "Codice Padre" / "SKU padre"
+        // header must not be swallowed by the looser `sku` synonyms ('codice',
+        // 'ref', …) in the fuzzy pass.
+        'parent_sku' => ['codicepadre', 'skupadre', 'parentsku', 'parent', 'padre', 'codpadre', 'articolopadre', 'codicearticolopadre'],
         'sku' => ['sku', 'codice', 'cod', 'codicearticolo', 'codart', 'codprodotto', 'articolo', 'ref', 'riferimento', 'barcode', 'ean'],
         'name' => ['nome', 'name', 'descrizione', 'descrizionebreve', 'titolo', 'denominazione', 'desc', 'prodotto'],
         'description' => ['descrizioneestesa', 'descrizionelunga', 'descrizionecompleta', 'descrizione2', 'longdescription', 'dettaglio', 'note'],
