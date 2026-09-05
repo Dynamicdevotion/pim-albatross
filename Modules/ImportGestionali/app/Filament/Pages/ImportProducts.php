@@ -296,6 +296,14 @@ class ImportProducts extends Page
                 ]),
             ]);
         }
+
+        // A "Codice Padre" column is useless without a Name column: every new
+        // container row would be skipped for a missing name.
+        if (in_array('parent_sku', $fields, true) && ! in_array('name', $fields, true)) {
+            throw ValidationException::withMessages([
+                'data.mapping' => __('pim.import.error.name_unmapped_with_parents'),
+            ]);
+        }
     }
 
     /**
@@ -368,7 +376,15 @@ class ImportProducts extends Page
         // An image column means one HTTP download per row — always off the
         // request, regardless of row count. Taxonomies stay in the request.
         $hasImages = (bool) array_intersect(['image_url', 'gallery_urls'], $mapping);
-        $inlineMax = (int) config('importgestionali.inline_max_rows', 300);
+
+        // A "parent_sku" column switches on the two-pass variable-product
+        // algorithm, which costs 2-3x per row and buffers every row — so it
+        // gets a lower inline ceiling than a plain simple-product import.
+        $hasParents = in_array('parent_sku', $mapping, true);
+        $inlineMax = (int) config(
+            $hasParents ? 'importgestionali.inline_max_rows_variants' : 'importgestionali.inline_max_rows',
+            $hasParents ? 100 : 300,
+        );
 
         if (! $hasImages && ($this->totalRows ?? PHP_INT_MAX) <= $inlineMax) {
             app(ImportRunner::class)->run($record);

@@ -169,7 +169,7 @@ class VariantGenerator
                     'stock' => 0,
                 ]);
 
-                $this->copyTranslations($parent, $variant, $baseCode, $nameOverride);
+                self::copyTranslations($parent, $variant, $baseCode, $nameOverride);
 
                 $variant->taxonomyTerms()->sync($termIds);
 
@@ -183,7 +183,12 @@ class VariantGenerator
         return ['created' => $created, 'skipped' => $skipped, 'variants' => $variants];
     }
 
-    private function copyTranslations(Product $from, Product $to, string $baseCode, ?string $baseNameOverride): void
+    /**
+     * Copy every translation of $from onto $to (base-language name optionally
+     * overridden). Reused by the product import to seed a variant that has no
+     * name of its own from its container.
+     */
+    public static function copyTranslations(Product $from, Product $to, string $baseCode, ?string $baseNameOverride): void
     {
         foreach ($from->translations as $translation) {
             $isBase = Locales::codeFor((int) $translation->language_id) === $baseCode;

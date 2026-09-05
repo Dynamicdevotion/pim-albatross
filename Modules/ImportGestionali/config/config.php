@@ -11,6 +11,14 @@ return [
     'inline_max_rows' => (int) env('IMPORT_INLINE_MAX_ROWS', 300),
 
     /*
+     * Same idea, but for an import that maps a "parent SKU" column (variable
+     * products): the two-pass algorithm and the per-variant writes cost more
+     * per row, so a lower ceiling keeps the confirm request within the shared
+     * host's web time limit. Larger variant files go to the queue.
+     */
+    'inline_max_rows_variants' => (int) env('IMPORT_INLINE_MAX_ROWS_VARIANTS', 100),
+
+    /*
      * Upload size cap for the source file, in megabytes.
      */
     'max_file_mb' => (int) env('IMPORT_MAX_FILE_MB', 20),
