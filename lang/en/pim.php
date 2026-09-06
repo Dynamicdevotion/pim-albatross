@@ -629,4 +629,18 @@ return [
             'unexpected' => 'Unexpected error during the sync.',
         ],
     ],
+
+    // Wiki module — in-panel guide, Markdown content read from docs/.
+    'wiki' => [
+        'nav' => [
+            'label' => 'Guide',
+        ],
+        'page' => [
+            'title' => 'Guide',
+        ],
+        'search' => [
+            'placeholder' => 'Search the guide...',
+            'no_results' => 'No pages found.',
+        ],
+    ],
 ];

@@ -1,0 +1,11 @@
+{
+    "name": "Wiki",
+    "alias": "wiki",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Wiki\\Providers\\WikiServiceProvider"
+    ],
+    "files": []
+}

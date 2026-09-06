@@ -8,5 +8,6 @@
     "ExportProdotti": true,
     "Branding": true,
     "Dashboard": true,
-    "WooSync": true
+    "WooSync": true,
+    "Wiki": true
 }

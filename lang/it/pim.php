@@ -629,4 +629,18 @@ return [
             'unexpected' => 'Errore imprevisto durante la sincronizzazione.',
         ],
     ],
+
+    // Modulo Wiki — guida interna al pannello, contenuti in Markdown letti da docs/.
+    'wiki' => [
+        'nav' => [
+            'label' => 'Guida',
+        ],
+        'page' => [
+            'title' => 'Guida',
+        ],
+        'search' => [
+            'placeholder' => 'Cerca nella guida...',
+            'no_results' => 'Nessuna pagina trovata.',
+        ],
+    ],
 ];

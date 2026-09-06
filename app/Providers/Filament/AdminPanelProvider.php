@@ -24,6 +24,7 @@ use Modules\Localization\Filament\LocalizationPanelPlugin;
 use Modules\Pricing\Filament\PricingPanelPlugin;
 use Modules\Products\Filament\ProductsPanelPlugin;
 use Modules\Taxonomies\Filament\TaxonomiesPanelPlugin;
+use Modules\Wiki\Filament\WikiPanelPlugin;
 use Modules\WooSync\Filament\WooSyncPanelPlugin;
 
 class AdminPanelProvider extends PanelProvider
@@ -70,6 +71,7 @@ class AdminPanelProvider extends PanelProvider
                 WooSyncPanelPlugin::make(),
                 BrandingPanelPlugin::make(),
                 DashboardPanelPlugin::make(),
+                WikiPanelPlugin::make(),
             ])
             ->middleware([
                 EncryptCookies::class,
