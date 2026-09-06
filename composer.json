@@ -3,17 +3,21 @@
     "name": "laravel/laravel",
     "type": "project",
     "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "keywords": [
+        "laravel",
+        "framework"
+    ],
     "license": "MIT",
     "require": {
-        "php": "^8.3",
         "bezhansalleh/filament-language-switch": "^5.0",
         "filament/filament": "^4.0",
         "filament/spatie-laravel-media-library-plugin": "^4.12",
         "laravel/framework": "^13.8",
         "laravel/pennant": "^1.26",
         "laravel/tinker": "^3.0",
+        "league/commonmark": "^2.10",
         "nwidart/laravel-modules": "^13.0",
+        "php": "^8.3",
         "spatie/laravel-medialibrary": "^11.23"
     },
     "require-dev": {
@@ -76,11 +80,11 @@
         ]
     },
     "extra": {
-    "merge-plugin": {
-        "include": [
-            "Modules/*/composer.json"
-        ]
-    },
+        "merge-plugin": {
+            "include": [
+                "Modules/*/composer.json"
+            ]
+        },
         "laravel": {
             "dont-discover": []
         }
