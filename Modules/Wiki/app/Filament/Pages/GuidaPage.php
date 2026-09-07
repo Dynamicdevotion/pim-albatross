@@ -9,8 +9,11 @@ use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Url;
 use Modules\Wiki\Support\DocPage;
+use Modules\Wiki\Support\DocSection;
 use Modules\Wiki\Support\DocTree;
 use Modules\Wiki\Support\MarkdownRenderer;
+use Modules\Wiki\Support\SearchHighlighter;
+use Modules\Wiki\Support\TableOfContents;
 
 /**
  * Renders docs/*.md as an in-panel wiki: a two-level tree (folder = section,
@@ -53,7 +56,41 @@ class GuidaPage extends Page
     }
 
     /**
-     * @return list<\Modules\Wiki\Support\DocSection>
+     * "Guida" > section title > page title, skipping the page title when
+     * it's the section's own index page. Reuses Filament's native
+     * breadcrumb bar (rendered by the panel layout from this method) rather
+     * than a bespoke breadcrumb UI.
+     *
+     * @return array<int|string, string>
+     */
+    public function getBreadcrumbs(): array
+    {
+        $page = $this->activeDocPage;
+
+        if ($page === null) {
+            return [$this->getTitle()];
+        }
+
+        $section = $this->sectionContaining($page);
+        $indexUrl = static::getUrl();
+
+        if ($section === null) {
+            return [$indexUrl => $this->getTitle(), $page->title];
+        }
+
+        if ($section->indexPage->slug === $page->slug) {
+            return [$indexUrl => $this->getTitle(), $section->title];
+        }
+
+        return [
+            $indexUrl => $this->getTitle(),
+            static::getUrl(['p' => $section->indexPage->slug]) => $section->title,
+            $page->title,
+        ];
+    }
+
+    /**
+     * @return list<DocSection>
      */
     #[Computed]
     public function tree(): array
@@ -67,7 +104,7 @@ class GuidaPage extends Page
      * just helps you find a page, it doesn't navigate away from the one
      * you're reading.
      *
-     * @return list<\Modules\Wiki\Support\DocSection>
+     * @return list<DocSection>
      */
     #[Computed]
     public function filteredTree(): array
@@ -110,5 +147,58 @@ class GuidaPage extends Page
     public function pageHtml(): string
     {
         return $this->activeDocPage === null ? '' : MarkdownRenderer::toHtml($this->activeDocPage->body());
+    }
+
+    /**
+     * The current page's h2/h3 outline, for the right-hand "on this page"
+     * summary.
+     *
+     * @return list<array{level: int, id: string, text: string}>
+     */
+    #[Computed]
+    public function pageToc(): array
+    {
+        return TableOfContents::extract($this->pageHtml);
+    }
+
+    /**
+     * $text with the current search term wrapped in `<mark>` (already
+     * HTML-escaped) — used for both sidebar titles and snippets so a match
+     * is visible, not just the fact that a page made it into the filtered
+     * list.
+     */
+    public function highlight(string $text): string
+    {
+        return SearchHighlighter::highlight($text, $this->search);
+    }
+
+    /**
+     * A short excerpt of $page's body around the search match, or null when
+     * there's no active search or the match was in the title only.
+     */
+    public function searchSnippet(DocPage $page): ?string
+    {
+        if (trim($this->search) === '') {
+            return null;
+        }
+
+        return SearchHighlighter::snippet($page->body(), $this->search);
+    }
+
+    private function sectionContaining(DocPage $page): ?DocSection
+    {
+        foreach ($this->tree as $section) {
+            if ($section->indexPage->slug === $page->slug) {
+                return $section;
+            }
+
+            foreach ($section->pages as $candidate) {
+                if ($candidate->slug === $page->slug) {
+                    return $section;
+                }
+            }
+        }
+
+        return null;
     }
 }

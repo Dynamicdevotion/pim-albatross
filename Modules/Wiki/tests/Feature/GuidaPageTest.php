@@ -44,4 +44,42 @@ class GuidaPageTest extends TestCase
             ->set('search', 'woocommerce')
             ->assertSee('Varianti');
     }
+
+    public function test_search_highlights_the_matched_term_in_the_sidebar(): void
+    {
+        Livewire::test(GuidaPage::class)
+            ->set('search', 'varianti')
+            ->assertSee('<mark>Varianti</mark>', false);
+    }
+
+    public function test_breadcrumbs_go_from_guida_to_the_section_to_the_page(): void
+    {
+        $component = Livewire::test(GuidaPage::class)
+            ->set('activePage', '02-prodotti/varianti')
+            ->instance();
+
+        $breadcrumbs = $component->getBreadcrumbs();
+
+        $this->assertSame(['Prodotti', 'Varianti'], array_values(array_slice($breadcrumbs, 1)));
+    }
+
+    public function test_breadcrumbs_stop_at_the_section_when_its_own_index_page_is_active(): void
+    {
+        $component = Livewire::test(GuidaPage::class)
+            ->set('activePage', '02-prodotti')
+            ->instance();
+
+        $breadcrumbs = $component->getBreadcrumbs();
+
+        $this->assertSame(['Prodotti'], array_values(array_slice($breadcrumbs, 1)));
+    }
+
+    public function test_table_of_contents_is_empty_for_pages_without_h2_or_h3_headings(): void
+    {
+        $component = Livewire::test(GuidaPage::class)
+            ->set('activePage', '02-prodotti/varianti')
+            ->instance();
+
+        $this->assertSame([], $component->pageToc);
+    }
 }
