@@ -4,16 +4,24 @@
 >
     {{-- toolbar: list, saved views, filters --}}
     <div class="flex flex-wrap items-end gap-3">
-        <label class="text-sm">
-            <span class="fi-fo-field-wrp-label mb-1 block text-sm font-medium">{{ __('pim.field.price_list') }}</span>
-            <x-filament::input.wrapper>
-                <x-filament::input.select wire:model.live="priceListId">
-                    @foreach ($this->priceListOptions() as $id => $name)
-                        <option value="{{ $id }}">{{ $name }}</option>
-                    @endforeach
-                </x-filament::input.select>
-            </x-filament::input.wrapper>
-        </label>
+        @if (\Modules\Pricing\Support\MultiplePriceListsFeature::enabled())
+            <label class="text-sm">
+                <span class="fi-fo-field-wrp-label mb-1 block text-sm font-medium">{{ __('pim.field.price_list') }}</span>
+                <x-filament::input.wrapper>
+                    <x-filament::input.select wire:model.live="priceListId">
+                        @foreach ($this->priceListOptions() as $id => $name)
+                            <option value="{{ $id }}">{{ $name }}</option>
+                        @endforeach
+                    </x-filament::input.select>
+                </x-filament::input.wrapper>
+            </label>
+        @else
+            {{-- Multiple price lists is a Pro feature: no selector, always the default list. --}}
+            <div class="text-sm">
+                <span class="fi-fo-field-wrp-label mb-1 block text-sm font-medium">{{ __('pim.field.price_list') }}</span>
+                <x-filament::badge color="gray">{{ \Modules\Pricing\Models\PriceList::default()?->name }}</x-filament::badge>
+            </div>
+        @endif
 
         <label class="text-sm">
             <span class="fi-fo-field-wrp-label mb-1 block text-sm font-medium">{{ __('pim.field.saved_view') }}</span>

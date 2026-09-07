@@ -16,17 +16,25 @@ use Modules\Products\Models\Product;
 class ProductPriceMatrix
 {
     /**
-     * Active price lists, default first then by name.
+     * Active price lists, default first then by name — collapsed to the
+     * default list alone when {@see MultiplePriceListsFeature} is off,
+     * regardless of how many other lists are marked `active` in the
+     * database. This is the single seam the product/variant price table and
+     * the bulk price grid both read through, so gating it here is enough:
+     * only this read path is gated, never the `active` column itself, so no
+     * data is touched and turning the flag back on restores every list.
      *
      * @return Collection<int, PriceList>
      */
     public static function activeLists(): Collection
     {
-        return PriceList::query()
-            ->active()
-            ->orderByDesc('is_default')
-            ->orderBy('name')
-            ->get();
+        $query = PriceList::query()->active()->orderByDesc('is_default')->orderBy('name');
+
+        if (! MultiplePriceListsFeature::enabled()) {
+            $query->where('is_default', true);
+        }
+
+        return $query->get();
     }
 
     /**

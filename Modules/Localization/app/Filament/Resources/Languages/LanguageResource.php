@@ -13,6 +13,7 @@ use Modules\Localization\Filament\Resources\Languages\Pages\ListLanguages;
 use Modules\Localization\Filament\Resources\Languages\Schemas\LanguageForm;
 use Modules\Localization\Filament\Resources\Languages\Tables\LanguagesTable;
 use Modules\Localization\Models\Language;
+use Modules\Localization\Support\MultilanguageFeature;
 
 class LanguageResource extends Resource
 {
@@ -32,6 +33,15 @@ class LanguageResource extends Resource
     public static function getPluralModelLabel(): string
     {
         return __('pim.resource.language.plural');
+    }
+
+    /**
+     * Adding a language beyond the base is a Pro feature — the "New" button
+     * is hidden entirely rather than shown-then-blocked.
+     */
+    public static function canCreate(): bool
+    {
+        return MultilanguageFeature::enabled();
     }
 
     public static function form(Schema $schema): Schema

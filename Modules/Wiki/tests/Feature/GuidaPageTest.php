@@ -82,4 +82,18 @@ class GuidaPageTest extends TestCase
 
         $this->assertSame([], $component->pageToc);
     }
+
+    public function test_the_inactive_badge_renders_next_to_the_woocommerce_section_when_woosync_is_off(): void
+    {
+        config(['woosync.enabled' => false]);
+
+        Livewire::test(GuidaPage::class)->assertSee(__('pim.wiki.badge.inactive'));
+    }
+
+    public function test_the_inactive_badge_does_not_render_when_woosync_is_on(): void
+    {
+        config(['woosync.enabled' => true]);
+
+        Livewire::test(GuidaPage::class)->assertDontSee(__('pim.wiki.badge.inactive'));
+    }
 }

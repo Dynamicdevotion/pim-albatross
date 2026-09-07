@@ -2,8 +2,8 @@
 
 namespace Modules\Localization\Providers;
 
+use Modules\Localization\Support\MultilanguageFeature;
 use Nwidart\Modules\Support\ModuleServiceProvider;
-use Illuminate\Console\Scheduling\Schedule;
 
 class LocalizationServiceProvider extends ModuleServiceProvider
 {
@@ -18,13 +18,6 @@ class LocalizationServiceProvider extends ModuleServiceProvider
     protected string $nameLower = 'localization';
 
     /**
-     * Command classes to register.
-     *
-     * @var string[]
-     */
-    // protected array $commands = [];
-
-    /**
      * Provider classes to register.
      *
      * @var string[]
@@ -34,13 +27,10 @@ class LocalizationServiceProvider extends ModuleServiceProvider
         RouteServiceProvider::class,
     ];
 
-    /**
-     * Define module schedules.
-     * 
-     * @param $schedule
-     */
-    // protected function configureSchedules(Schedule $schedule): void
-    // {
-    //     $schedule->command('inspire')->hourly();
-    // }
+    public function boot(): void
+    {
+        parent::boot();
+
+        MultilanguageFeature::defineFeature();
+    }
 }

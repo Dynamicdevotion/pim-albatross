@@ -39,5 +39,14 @@
              the module active. FeatureFlagTest still exercises the off state
              by toggling config('woosync.enabled') at runtime. -->
         <env name="WOOSYNC_ENABLED" value="true"/>
+        <!-- Multilanguage and multiple price lists ship ON by default: unlike
+             WooSync, these describe functionality the panel already has
+             (this installation's seed data has 5 active languages and a
+             non-trivial price list setup) rather than a brand-new opt-in
+             add-on, so the test suite assumes the full feature set is
+             present throughout. Dedicated tests exercise the off state by
+             toggling config(...) at runtime, same as WooSync's. -->
+        <env name="MULTILANGUAGE_ENABLED" value="true"/>
+        <env name="MULTIPLE_PRICE_LISTS_ENABLED" value="true"/>
     </php>
 </phpunit>

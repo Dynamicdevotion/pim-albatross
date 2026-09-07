@@ -156,4 +156,40 @@ class ProductsTableFiltersTest extends TestCase
             ->assertCanSeeTableRecords([$low])
             ->assertCanNotSeeTableRecords([$zero, $plenty, $variable]);
     }
+
+    public function test_missing_translation_filter_is_hidden_when_multilanguage_is_disabled(): void
+    {
+        config(['localization.multilanguage_enabled' => false]);
+
+        $component = Livewire::test(ListProducts::class);
+
+        $this->assertNull($component->instance()->getTable()->getFilter('missing_translation'));
+    }
+
+    public function test_missing_translation_filter_exists_when_multilanguage_is_enabled(): void
+    {
+        config(['localization.multilanguage_enabled' => true]);
+
+        $component = Livewire::test(ListProducts::class);
+
+        $this->assertNotNull($component->instance()->getTable()->getFilter('missing_translation'));
+    }
+
+    public function test_price_filters_list_selector_is_hidden_when_multiple_price_lists_is_disabled(): void
+    {
+        config(['pricing.multiple_price_lists_enabled' => false]);
+
+        $html = Livewire::test(ListProducts::class)->html();
+
+        $this->assertStringNotContainsString('tableDeferredFilters.price.price_list_id', $html);
+    }
+
+    public function test_price_filters_list_selector_exists_when_multiple_price_lists_is_enabled(): void
+    {
+        config(['pricing.multiple_price_lists_enabled' => true]);
+
+        $html = Livewire::test(ListProducts::class)->html();
+
+        $this->assertStringContainsString('tableDeferredFilters.price.price_list_id', $html);
+    }
 }

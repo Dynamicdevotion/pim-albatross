@@ -2,33 +2,42 @@
 
 namespace Modules\Wiki\Tests\Feature;
 
+use Modules\Wiki\Support\DocSection;
 use Modules\Wiki\Support\DocTree;
 use Tests\TestCase;
 
 class WikiVisibilityTest extends TestCase
 {
-    public function test_woocommerce_section_is_hidden_when_woosync_is_disabled(): void
+    public function test_woocommerce_section_stays_visible_but_marked_inactive_when_woosync_is_disabled(): void
     {
         config(['woosync.enabled' => false]);
 
-        $this->assertNotContains('08-woocommerce', $this->sectionSlugs());
+        $section = $this->sectionsBySlug()['08-woocommerce'] ?? null;
+
+        $this->assertNotNull($section, 'The section is shown, not hidden — it doubles as an upsell surface.');
+        $this->assertTrue($section->inactive);
     }
 
-    public function test_woocommerce_section_appears_when_woosync_is_enabled(): void
+    public function test_woocommerce_section_appears_active_when_woosync_is_enabled(): void
     {
         config(['woosync.enabled' => true]);
 
-        $this->assertContains('08-woocommerce', $this->sectionSlugs());
+        $section = $this->sectionsBySlug()['08-woocommerce'] ?? null;
+
+        $this->assertNotNull($section);
+        $this->assertFalse($section->inactive);
     }
 
-    public function test_core_sections_are_always_visible_regardless_of_the_flag(): void
+    public function test_core_sections_are_always_visible_and_active_regardless_of_the_flag(): void
     {
         config(['woosync.enabled' => false]);
 
-        $slugs = $this->sectionSlugs();
+        $sections = $this->sectionsBySlug();
 
-        $this->assertContains('01-primi-passi', $slugs);
-        $this->assertContains('02-prodotti', $slugs);
+        $this->assertArrayHasKey('01-primi-passi', $sections);
+        $this->assertFalse($sections['01-primi-passi']->inactive);
+        $this->assertArrayHasKey('02-prodotti', $sections);
+        $this->assertFalse($sections['02-prodotti']->inactive);
     }
 
     public function test_sections_and_pages_are_ordered_by_front_matter_order(): void
@@ -41,10 +50,10 @@ class WikiVisibilityTest extends TestCase
     }
 
     /**
-     * @return list<string>
+     * @return array<string, DocSection>
      */
-    private function sectionSlugs(): array
+    private function sectionsBySlug(): array
     {
-        return array_map(fn ($section) => $section->slug, DocTree::build());
+        return collect(DocTree::build())->keyBy('slug')->all();
     }
 }
