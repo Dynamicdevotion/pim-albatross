@@ -642,5 +642,14 @@ return [
             'placeholder' => 'Cerca nella guida...',
             'no_results' => 'Nessuna pagina trovata.',
         ],
+        'toc' => [
+            'heading' => 'In questa pagina',
+        ],
+        'heading_permalink' => [
+            'title' => 'Link a questa sezione',
+        ],
+        'help_icon' => [
+            'tooltip' => 'Apri la guida',
+        ],
     ],
 ];

@@ -642,5 +642,14 @@ return [
             'placeholder' => 'Search the guide...',
             'no_results' => 'No pages found.',
         ],
+        'toc' => [
+            'heading' => 'On this page',
+        ],
+        'heading_permalink' => [
+            'title' => 'Link to this section',
+        ],
+        'help_icon' => [
+            'tooltip' => 'Open the guide',
+        ],
     ],
 ];
