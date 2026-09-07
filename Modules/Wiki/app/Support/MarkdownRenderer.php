@@ -20,9 +20,11 @@ use League\CommonMark\MarkdownConverter;
  * Heading anchors use the raw slug as both the `id` (put directly on the
  * `<h2>`/`<h3>` via `apply_id_to_heading`) and the permalink's `href`, so a
  * link like `#come-generare-varianti` lands on the heading itself regardless
- * of whether the permalink icon is visible. `scroll-mt-20` is applied to
- * every heading so the sticky Filament topbar doesn't cover it when jumped
- * to directly.
+ * of whether the permalink icon is visible. The scroll offset for the sticky
+ * topbar is applied via plain CSS in guida.blade.php (`.wiki-page-content h2,
+ * h3 { scroll-margin-top }`) rather than a `heading_class` here — the
+ * Filament panel has no build step that would compile a Tailwind utility
+ * class used inside Markdown-rendered content.
  */
 final class MarkdownRenderer
 {
@@ -45,7 +47,6 @@ final class MarkdownRenderer
                 'id_prefix' => '',
                 'fragment_prefix' => '',
                 'apply_id_to_heading' => true,
-                'heading_class' => 'scroll-mt-20',
                 'insert' => HeadingPermalinkProcessor::INSERT_AFTER,
                 'html_class' => 'wiki-heading-permalink',
                 'title' => __('pim.wiki.heading_permalink.title'),
