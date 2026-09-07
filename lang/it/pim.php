@@ -229,6 +229,7 @@ return [
         'group' => [
             'fields' => 'Campi prodotto',
             'taxonomies' => 'Tassonomie',
+            'translations' => 'Traduzioni',
         ],
         'field' => [
             'file' => 'File CSV o Excel',
@@ -237,6 +238,9 @@ return [
             'parent_sku' => 'Codice Padre',
             'name' => 'Nome',
             'description' => 'Descrizione',
+            'meta_title' => 'Meta Title',
+            'meta_description' => 'Meta Description',
+            'slug' => 'Slug',
             'price' => 'Prezzo',
             'stock' => 'Giacenza',
             'weight' => 'Peso',
@@ -252,7 +256,7 @@ return [
         ],
         'help' => [
             'file' => 'Formati accettati: CSV, XLSX, ODS. Il vecchio formato .xls (Excel 97-2003) non è supportato: esportalo come .xlsx o .csv.',
-            'map' => 'Per ogni colonna del file scegli il campo del sistema a cui corrisponde. SKU è obbligatorio: è la chiave con cui i prodotti vengono riconosciuti. Le colonne immagine contengono URL da cui scaricare i file; se ne mappi una, l\'import viene sempre elaborato in coda. Puoi anche mappare una colonna a una tassonomia: la cella contiene uno o più nomi di termine separati da |. La colonna «Codice Padre» collega una variante al suo prodotto padre tramite lo SKU: lasciala vuota per un prodotto a sé stante, compilala con lo SKU del padre per una variante. L\'ordine delle righe non conta.',
+            'map' => 'Per ogni colonna del file scegli il campo del sistema a cui corrisponde. SKU è obbligatorio: è la chiave con cui i prodotti vengono riconosciuti. Le colonne immagine contengono URL da cui scaricare i file; se ne mappi una, l\'import viene sempre elaborato in coda. Il gruppo "Traduzioni" propone una voce per ogni lingua attiva e ogni campo traducibile (Nome, Descrizione, Meta Title, Meta Description, Slug): mappa ad esempio "Nome (Inglese)" per importare il nome in inglese nella stessa riga. Puoi anche mappare una colonna a una tassonomia: la cella contiene uno o più nomi di termine separati da |. La colonna «Codice Padre» collega una variante al suo prodotto padre tramite lo SKU: lasciala vuota per un prodotto a sé stante, compilala con lo SKU del padre per una variante. L\'ordine delle righe non conta.',
             'update_existing' => 'Disattivato: le righe con uno SKU già presente vengono saltate e segnalate nel report. Attivato: aggiornano il prodotto esistente; i campi lasciati vuoti non vengono toccati.',
             'create_missing_terms' => 'Disattivato: un termine non trovato nella tassonomia viene segnalato nel report e ignorato. Attivato: il termine viene creato al volo nella tassonomia corrispondente.',
             'replace_taxonomy_terms' => 'Disattivato: i termini risolti si aggiungono a quelli già presenti sul prodotto. Attivato: per ogni tassonomia mappata, i termini della cella sostituiscono quelli attuali (solo se almeno un termine risolve).',

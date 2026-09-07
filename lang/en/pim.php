@@ -229,6 +229,7 @@ return [
         'group' => [
             'fields' => 'Product fields',
             'taxonomies' => 'Taxonomies',
+            'translations' => 'Translations',
         ],
         'field' => [
             'file' => 'CSV or Excel file',
@@ -237,6 +238,9 @@ return [
             'parent_sku' => 'Parent SKU',
             'name' => 'Name',
             'description' => 'Description',
+            'meta_title' => 'Meta Title',
+            'meta_description' => 'Meta Description',
+            'slug' => 'Slug',
             'price' => 'Price',
             'stock' => 'Stock',
             'weight' => 'Weight',
@@ -252,7 +256,7 @@ return [
         ],
         'help' => [
             'file' => 'Accepted formats: CSV, XLSX, ODS. The old .xls format (Excel 97-2003) is not supported — save it as .xlsx or .csv.',
-            'map' => 'For each column in the file, choose the system field it maps to. SKU is required: it is the key products are matched on. Image columns hold URLs to download the files from; mapping one always sends the import to the queue. A column can also be mapped to a taxonomy: the cell holds one or more term names separated by |. The "Parent SKU" column links a variant to its parent product by SKU: leave it empty for a stand-alone product, fill it with the parent SKU for a variant. Row order does not matter.',
+            'map' => 'For each column in the file, choose the system field it maps to. SKU is required: it is the key products are matched on. Image columns hold URLs to download the files from; mapping one always sends the import to the queue. The "Translations" group offers one entry per active language and translatable field (Name, Description, Meta Title, Meta Description, Slug): map e.g. "Name (English)" to import the English name from the same row. A column can also be mapped to a taxonomy: the cell holds one or more term names separated by |. The "Parent SKU" column links a variant to its parent product by SKU: leave it empty for a stand-alone product, fill it with the parent SKU for a variant. Row order does not matter.',
             'update_existing' => 'Off: rows whose SKU already exists are skipped and listed in the report. On: they update the existing product; fields left empty are not touched.',
             'create_missing_terms' => 'Off: a term not found in the taxonomy is reported and ignored. On: the term is created on the fly in the matching taxonomy.',
             'replace_taxonomy_terms' => 'Off: resolved terms are added to those already on the product. On: for each mapped taxonomy, the cell\'s terms replace the current ones (only when at least one term resolves).',
