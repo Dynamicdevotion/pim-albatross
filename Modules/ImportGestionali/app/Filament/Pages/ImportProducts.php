@@ -34,6 +34,7 @@ use Modules\ImportGestionali\Support\RowMapper;
 use Modules\ImportGestionali\Support\RowOutcome;
 use Modules\ImportGestionali\Support\SpreadsheetReader;
 use Modules\ImportGestionali\Support\UnreadableImportFile;
+use Modules\Localization\Support\Locales;
 
 /**
  * The import wizard: upload → map columns → preview → confirm.
@@ -297,9 +298,16 @@ class ImportProducts extends Page
             ]);
         }
 
-        // A "Codice Padre" column is useless without a Name column: every new
-        // container row would be skipped for a missing name.
-        if (in_array('parent_sku', $fields, true) && ! in_array('name', $fields, true)) {
+        // A "Codice Padre" column is useless without a base-language name
+        // column: every new container row would be skipped for a missing
+        // name. The bare string 'name' is the pre-"Traduzioni" legacy
+        // alias for the base language (see MappingTarget), accepted here
+        // too so a historical mapping keeps validating correctly.
+        $baseNameTarget = MappingTarget::forTranslation(Locales::base()->id, 'name');
+
+        if (in_array('parent_sku', $fields, true)
+            && ! in_array('name', $fields, true)
+            && ! in_array($baseNameTarget, $fields, true)) {
             throw ValidationException::withMessages([
                 'data.mapping' => __('pim.import.error.name_unmapped_with_parents'),
             ]);

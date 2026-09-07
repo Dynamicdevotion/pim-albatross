@@ -2,10 +2,19 @@
 
 namespace Modules\ImportGestionali\Support;
 
+use Modules\Localization\Support\Locales;
+
 /**
  * Best-effort pre-fill of the column mapping from the header names, so the
  * user usually only has to check it rather than build it. Italian and English
  * synonyms; the user always overrides in the mapping step.
+ *
+ * A bare "Nome"/"Descrizione"-style header (no language hint) guesses to the
+ * base language's translation target — the same meaning `name`/`description`
+ * used to have before the dynamic "Traduzioni" group existed (see
+ * {@see MappingTarget}). A header naming a specific non-base language (e.g.
+ * "Nome EN") is not guessed — the synonym lists have no per-language variants
+ * to match against, so that column is left for the user to map by hand.
  */
 final class FieldGuesser
 {
@@ -23,6 +32,9 @@ final class FieldGuesser
         'sku' => ['sku', 'codice', 'cod', 'codicearticolo', 'codart', 'codprodotto', 'articolo', 'ref', 'riferimento', 'barcode', 'ean'],
         'name' => ['nome', 'name', 'descrizione', 'descrizionebreve', 'titolo', 'denominazione', 'desc', 'prodotto'],
         'description' => ['descrizioneestesa', 'descrizionelunga', 'descrizionecompleta', 'descrizione2', 'longdescription', 'dettaglio', 'note'],
+        'meta_title' => ['metatitle', 'titoloseo', 'seotitle', 'metatag', 'titleseo'],
+        'meta_description' => ['metadescription', 'descrizioneseo', 'seodescription', 'metadesc'],
+        'slug' => ['slug', 'urlseo', 'permalink', 'friendlyurl'],
         'price' => ['prezzo', 'price', 'prezzovendita', 'prezzolistino', 'prezzopubblico', 'importo', 'listino', 'pubblico'],
         'stock' => ['giacenza', 'stock', 'quantita', 'qta', 'qty', 'disponibilita', 'disponibile', 'magazzino', 'scorta'],
         'weight' => ['peso', 'weight', 'pesokg', 'kg'],
@@ -31,6 +43,15 @@ final class FieldGuesser
         'height' => ['altezza', 'height', 'alt'],
         'status' => ['stato', 'status', 'statoprodotto', 'pubblicato', 'attivo'],
     ];
+
+    /**
+     * Fields that, once guessed, mean "the base language" and must be
+     * translated into the equivalent `translation:{baseLanguageId}:{field}`
+     * target rather than kept as a bare string.
+     *
+     * @var list<string>
+     */
+    private const TRANSLATABLE = ['name', 'description', 'meta_title', 'meta_description', 'slug'];
 
     /**
      * @param  list<string>  $header
@@ -47,11 +68,12 @@ final class FieldGuesser
             $taxonomyByName[self::normalize($name)] = MappingTarget::forTaxonomy($id);
         }
 
+        $baseLanguageId = Locales::base()->id;
         $mapping = [];
         $taken = [];
 
         foreach ($header as $index => $name) {
-            $target = $taxonomyByName[self::normalize($name)] ?? self::guess($name);
+            $target = $taxonomyByName[self::normalize($name)] ?? self::guess($name, $baseLanguageId);
             $mapping[$index] = ($target !== null && $target !== '' && ! isset($taken[$target])) ? $target : '';
 
             if ($mapping[$index] !== '') {
@@ -62,7 +84,7 @@ final class FieldGuesser
         return $mapping;
     }
 
-    public static function guess(string $header): ?string
+    public static function guess(string $header, ?int $baseLanguageId = null): ?string
     {
         $needle = self::normalize($header);
 
@@ -70,6 +92,21 @@ final class FieldGuesser
             return null;
         }
 
+        $field = self::matchSynonym($needle);
+
+        if ($field === null) {
+            return null;
+        }
+
+        if (in_array($field, self::TRANSLATABLE, true)) {
+            return MappingTarget::forTranslation($baseLanguageId ?? Locales::base()->id, $field);
+        }
+
+        return $field;
+    }
+
+    private static function matchSynonym(string $needle): ?string
+    {
         foreach (self::SYNONYMS as $field => $synonyms) {
             if (in_array($needle, $synonyms, true)) {
                 return $field;

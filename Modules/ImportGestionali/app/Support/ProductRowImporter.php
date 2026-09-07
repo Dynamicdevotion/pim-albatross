@@ -3,7 +3,10 @@
 namespace Modules\ImportGestionali\Support;
 
 use Illuminate\Support\Facades\DB;
+use Modules\Localization\Filament\Concerns\HandlesTranslatableName;
+use Modules\Localization\Models\ProductTranslation;
 use Modules\Localization\Support\Locales;
+use Modules\Localization\Support\SlugGenerator;
 use Modules\Pricing\Models\PriceList;
 use Modules\Pricing\Support\ProductPriceMatrix;
 use Modules\Products\Enums\ProductType;
@@ -23,6 +26,17 @@ use Modules\Products\Support\VariantGenerator;
  * one or more term names separated by `|`; they are resolved against that
  * taxonomy and linked through `product_taxonomy_term` — the same mechanism for
  * a simple product, a container and a variant.
+ *
+ * Columns mapped to a translation (`translation:{languageId}:{field}`, also
+ * {@see MappingTarget}) are collected by {@see translationTargets()} and
+ * written by {@see writeTranslations()}, one `product_translations` row per
+ * language present in the row — see those methods for the exact rules
+ * (blank cell never touches an existing value, slug generation, a non-base
+ * language needs a name to be created at all). The legacy bare `name`/
+ * `description` targets — no longer offered by the mapping step's dropdown,
+ * see {@see MappingTarget} — are folded into the base language by the same
+ * method, so a historical `ImportRecord` mapped before this feature existed
+ * keeps working unchanged.
  *
  * `dryRun` runs every check and reports the outcome without writing — the
  * preview and the real import share this exact code path.
@@ -100,8 +114,8 @@ final class ProductRowImporter
             return RowOutcome::skipped($line, $errors[0]);
         }
 
-        $name = trim($mapped['name'] ?? '');
-        $description = trim($mapped['description'] ?? '');
+        $targets = $this->translationTargets($mapped);
+        $baseName = trim($targets[$this->baseLanguageId]['name'] ?? '');
 
         // In the preview a row with a "Codice Padre" value is a variant: it may
         // legitimately have no name of its own (it inherits the parent's), so
@@ -109,7 +123,7 @@ final class ProductRowImporter
         // variant row through import() — see ImportRunner.
         $isVariantRow = trim($mapped['parent_sku'] ?? '') !== '';
 
-        if ($existing === null && $name === '' && ! $isVariantRow) {
+        if ($existing === null && $baseName === '' && ! $isVariantRow) {
             return RowOutcome::skipped($line, __('pim.import.issue.name_missing', ['line' => $line]));
         }
 
@@ -131,7 +145,7 @@ final class ProductRowImporter
             return $outcome->withTaxonomies($resolutions);
         }
 
-        $product = DB::transaction(function () use ($existing, $sku, $stock, $weight, $length, $width, $height, $status, $name, $description, $price): Product {
+        $product = DB::transaction(function () use ($existing, $sku, $stock, $weight, $length, $width, $height, $status, $targets, $price): Product {
             $product = $existing ?? new Product(['type' => ProductType::Simple->value]);
             $product->sku = $sku;
 
@@ -153,22 +167,7 @@ final class ProductRowImporter
 
             $product->save();
 
-            $translation = [];
-
-            if ($name !== '') {
-                $translation['name'] = $name;
-            }
-
-            if ($description !== '') {
-                $translation['description'] = $description;
-            }
-
-            if ($translation !== []) {
-                $product->translations()->updateOrCreate(
-                    ['language_id' => $this->baseLanguageId],
-                    $translation,
-                );
-            }
+            $this->writeTranslations($product, $targets);
 
             if ($price !== null && $this->defaultPriceListId > 0) {
                 ProductPriceMatrix::write($product, [[
@@ -237,21 +236,23 @@ final class ProductRowImporter
         }
 
         $existing = Product::query()->where('sku', $sku)->first();
+        $targets = $this->translationTargets($mapped);
+        $baseName = trim($targets[$this->baseLanguageId]['name'] ?? '');
 
         if ($existing === null) {
             if (! $definitionRow) {
                 return RowOutcome::skipped($line, __('pim.import.issue.parent_not_found', ['line' => $line, 'sku' => $sku]), 'parent_not_found');
             }
 
-            if (trim($mapped['name'] ?? '') === '') {
+            if ($baseName === '') {
                 return RowOutcome::skipped($line, __('pim.import.issue.name_missing', ['line' => $line]));
             }
 
             $warnings = [];
-            $product = DB::transaction(function () use ($sku, $mapped, $line, &$warnings): Product {
+            $product = DB::transaction(function () use ($sku, $mapped, $targets, $line, &$warnings): Product {
                 $product = new Product(['type' => ProductType::Variable->value]);
                 $product->sku = $sku;
-                $this->applyContainerFields($product, $mapped, $line, $warnings);
+                $this->applyContainerFields($product, $mapped, $targets, $line, $warnings);
 
                 return $product;
             });
@@ -271,11 +272,11 @@ final class ProductRowImporter
             }
 
             $warnings = [__('pim.import.issue.parent_converted', ['line' => $line, 'sku' => $sku])];
-            $product = DB::transaction(function () use ($existing, $mapped, $line, &$warnings): Product {
+            $product = DB::transaction(function () use ($existing, $mapped, $targets, $line, &$warnings): Product {
                 $existing->type = ProductType::Variable;
                 $existing->save();              // saving hook nulls stock + dimensions
                 $existing->prices()->delete();  // a container has no own price in the UI
-                $this->applyContainerFields($existing, $mapped, $line, $warnings);
+                $this->applyContainerFields($existing, $mapped, $targets, $line, $warnings);
 
                 return $existing;
             });
@@ -288,8 +289,8 @@ final class ProductRowImporter
         // Already a variable container.
         if ($definitionRow && $updateExisting) {
             $warnings = [];
-            $product = DB::transaction(function () use ($existing, $mapped, $line, &$warnings): Product {
-                $this->applyContainerFields($existing, $mapped, $line, $warnings);
+            $product = DB::transaction(function () use ($existing, $mapped, $targets, $line, &$warnings): Product {
+                $this->applyContainerFields($existing, $mapped, $targets, $line, $warnings);
 
                 return $existing;
             });
@@ -305,9 +306,11 @@ final class ProductRowImporter
     /**
      * Create or update one variant row under an already-persisted variable
      * container ($parentId). Mirrors {@see import()} but writes a `variant`
-     * with its own price/stock/dimensions and, when the row has no name of its
-     * own, seeds its translations from the parent — exactly like the admin's
-     * "Generate variants".
+     * with its own price/stock/dimensions. When the row carries no
+     * translation data of its own at all, it inherits every one of the
+     * parent's translations instead — exactly like the admin's "Generate
+     * variants" — rather than mixing inherited and row-supplied content
+     * language by language.
      *
      * @param  array<string, string>  $mapped
      * @param  array<string, int>  $seenSkus
@@ -353,12 +356,12 @@ final class ProductRowImporter
             return RowOutcome::skipped($line, $errors[0]);
         }
 
-        $name = trim($mapped['name'] ?? '');
-        $description = trim($mapped['description'] ?? '');
+        $targets = $this->translationTargets($mapped);
+        $baseName = trim($targets[$this->baseLanguageId]['name'] ?? '');
         $taxonomyTargets = $this->taxonomyTargets($mapped);
         $isNew = $existing === null;
 
-        $product = DB::transaction(function () use ($existing, $isNew, $parentId, $sku, $stock, $weight, $length, $width, $height, $status, $name, $description, $price): Product {
+        $product = DB::transaction(function () use ($existing, $isNew, $parentId, $sku, $stock, $weight, $length, $width, $height, $status, $targets, $price): Product {
             $product = $existing ?? new Product(['type' => ProductType::Variant->value, 'parent_id' => $parentId]);
             $product->parent_id = $parentId;
             $product->sku = $sku;
@@ -381,21 +384,8 @@ final class ProductRowImporter
 
             $product->save();
 
-            $translation = [];
-
-            if ($name !== '') {
-                $translation['name'] = $name;
-            }
-
-            if ($description !== '') {
-                $translation['description'] = $description;
-            }
-
-            if ($translation !== []) {
-                $product->translations()->updateOrCreate(
-                    ['language_id' => $this->baseLanguageId],
-                    $translation,
-                );
+            if ($targets !== []) {
+                $this->writeTranslations($product, $targets);
             } elseif ($isNew) {
                 $parent = Product::query()->with('translations')->find($parentId);
 
@@ -419,7 +409,7 @@ final class ProductRowImporter
         $this->syncMainImage($product, trim($mapped['image_url'] ?? ''), $line, $warnings);
         $this->syncGallery($product, trim($mapped['gallery_urls'] ?? ''), $line, $warnings);
 
-        if ($isNew && $name === '' && $product->translate(Locales::baseCode())?->name === null) {
+        if ($isNew && $baseName === '' && $product->translate(Locales::baseCode())?->name === null) {
             $warnings[] = __('pim.import.issue.variant_name_missing', ['line' => $line, 'sku' => $sku]);
         }
 
@@ -429,15 +419,16 @@ final class ProductRowImporter
     }
 
     /**
-     * Container-level scalar cells: status, plus base-language name/description.
-     * Price, stock and dimensions are deliberately not touched. Must run inside
-     * a DB transaction opened by the caller; an unrecognised status is a report
-     * note here, never a skip.
+     * Container-level scalar cells: status, plus whatever translations the
+     * row carries. Price, stock and dimensions are deliberately not touched.
+     * Must run inside a DB transaction opened by the caller; an unrecognised
+     * status is a report note here, never a skip.
      *
      * @param  array<string, string>  $mapped
+     * @param  array<int, array<string, string>>  $targets  from translationTargets()
      * @param  list<string>  $warnings
      */
-    private function applyContainerFields(Product $product, array $mapped, int $line, array &$warnings): void
+    private function applyContainerFields(Product $product, array $mapped, array $targets, int $line, array &$warnings): void
     {
         $errors = [];
         $status = $this->status($mapped['status'] ?? null, $line, $errors);
@@ -454,24 +445,7 @@ final class ProductRowImporter
 
         $product->save();
 
-        $translation = [];
-        $name = trim($mapped['name'] ?? '');
-        $description = trim($mapped['description'] ?? '');
-
-        if ($name !== '') {
-            $translation['name'] = $name;
-        }
-
-        if ($description !== '') {
-            $translation['description'] = $description;
-        }
-
-        if ($translation !== []) {
-            $product->translations()->updateOrCreate(
-                ['language_id' => $this->baseLanguageId],
-                $translation,
-            );
-        }
+        $this->writeTranslations($product, $targets);
     }
 
     /**
@@ -486,6 +460,117 @@ final class ProductRowImporter
         $this->syncTaxonomies($product, $this->taxonomyTargets($mapped), $line, $warnings);
         $this->syncMainImage($product, trim($mapped['image_url'] ?? ''), $line, $warnings);
         $this->syncGallery($product, trim($mapped['gallery_urls'] ?? ''), $line, $warnings);
+    }
+
+    /**
+     * Translation targets present in the row, as languageId => [field =>
+     * value]. Empty cells are dropped per field — an unmapped/blank cell for
+     * a given language+field leaves the existing value untouched on update,
+     * see {@see writeTranslations()}.
+     *
+     * The legacy bare `name`/`description` targets (no longer offered by the
+     * mapping step, see {@see MappingTarget}) are folded in here as aliases
+     * for the base language, so a historical `ImportRecord` mapped before
+     * the "Traduzioni" group existed keeps working unchanged. A file cannot
+     * produce both through today's dropdown, so there is no real ambiguity
+     * about which one wins when both happen to be present.
+     *
+     * @param  array<string, string>  $mapped
+     * @return array<int, array<string, string>>
+     */
+    private function translationTargets(array $mapped): array
+    {
+        $targets = [];
+
+        $legacyName = trim($mapped['name'] ?? '');
+
+        if ($legacyName !== '') {
+            $targets[$this->baseLanguageId]['name'] = $legacyName;
+        }
+
+        $legacyDescription = trim($mapped['description'] ?? '');
+
+        if ($legacyDescription !== '') {
+            $targets[$this->baseLanguageId]['description'] = $legacyDescription;
+        }
+
+        foreach ($mapped as $target => $raw) {
+            if (! MappingTarget::isTranslation($target)) {
+                continue;
+            }
+
+            $value = trim((string) $raw);
+
+            if ($value === '') {
+                continue;
+            }
+
+            $targets[MappingTarget::translationLanguageId($target)][MappingTarget::translationField($target)] = $value;
+        }
+
+        return $targets;
+    }
+
+    /**
+     * Upsert one `product_translations` row per language present in
+     * $targets — only the fields actually given for that language are
+     * touched, so a blank/unmapped cell never overwrites an existing value.
+     *
+     * A brand-new translation for a language other than the base one needs a
+     * name to be created at all, mirroring
+     * {@see HandlesTranslatableName::saveNameTranslations()}
+     * in the admin form (a translation without a name is simply not
+     * created); the base language keeps its existing behaviour unchanged,
+     * since the base name is already guaranteed present by the caller
+     * before a *new* product is ever created (an update may legitimately
+     * touch only a non-name field on the base language).
+     *
+     * Slug: generated from the name when a brand-new translation leaves it
+     * blank; a submitted slug (create or update) is sanitized and checked
+     * unique within that language, excluding this product's own row — the
+     * same rule the admin form's per-language slug field follows.
+     *
+     * @param  array<int, array<string, string>>  $targets  languageId => field => value
+     */
+    private function writeTranslations(Product $product, array $targets): void
+    {
+        foreach ($targets as $languageId => $fields) {
+            $existing = $product->exists
+                ? $product->translations()->where('language_id', $languageId)->first()
+                : null;
+
+            if ($existing === null && $languageId !== $this->baseLanguageId && ($fields['name'] ?? '') === '') {
+                continue;
+            }
+
+            if (array_key_exists('slug', $fields) || $existing === null) {
+                $name = $fields['name'] ?? $existing?->name ?? '';
+                $fields['slug'] = $this->resolveImportSlug($product, $languageId, $fields['slug'] ?? null, $name);
+            }
+
+            $product->translations()->updateOrCreate(['language_id' => $languageId], $fields);
+        }
+    }
+
+    /**
+     * A submitted slug, sanitized; or one derived from $name when left
+     * blank. Always unique within $languageId, excluding this product's own
+     * translation row — mirrors
+     * {@see HandlesTranslatableName::resolveTranslatedSlug()}.
+     */
+    private function resolveImportSlug(Product $product, int $languageId, ?string $submitted, string $name): string
+    {
+        $submitted = trim((string) $submitted);
+        $base = $submitted !== '' ? $submitted : $name;
+
+        return SlugGenerator::unique(
+            $base,
+            fn (string $candidate): bool => ProductTranslation::query()
+                ->where('language_id', $languageId)
+                ->where('slug', $candidate)
+                ->where('product_id', '!=', $product->id ?? 0)
+                ->exists(),
+        );
     }
 
     /**
