@@ -19,7 +19,10 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Modules\Localization\Models\Language;
 use Modules\Localization\Support\Locales;
+use Modules\Localization\Support\MultilanguageFeature;
+use Modules\Pricing\Filament\Pages\ManagePrices;
 use Modules\Pricing\Models\PriceList;
+use Modules\Pricing\Support\MultiplePriceListsFeature;
 use Modules\Products\Enums\ProductType;
 use Modules\Products\Models\Product;
 use Modules\Products\Support\ProductListQuery;
@@ -318,7 +321,7 @@ class ProductsTable
      * The full filter set behind the drawer, in display order. Public so other
      * screens over the same product query (the bulk price grid) can reuse the
      * identical set, or compose their own subset plus a screen-specific filter
-     * — see {@see \Modules\Pricing\Filament\Pages\ManagePrices}.
+     * — see {@see ManagePrices}.
      *
      * @return list<Filter>
      */
@@ -328,7 +331,7 @@ class ProductsTable
             self::searchFilter(),
             self::typeFilter(),
             self::statusFilter(),
-            self::missingTranslationFilter(),
+            ...(MultilanguageFeature::enabled() ? [self::missingTranslationFilter()] : []),
             self::taxonomyFilter(),
             self::priceFilter(),
             self::stockFilter(),
@@ -431,16 +434,18 @@ class ProductsTable
             ->label(__('pim.filter.price'))
             ->columns(2)
             ->schema([
-                Select::make('price_list_id')
-                    ->label(__('pim.field.price_list'))
-                    ->native(false)
-                    ->selectablePlaceholder(false)
-                    ->options(fn (): array => PriceList::query()->active()
-                        ->orderByDesc('is_default')
-                        ->orderBy('name')
-                        ->pluck('name', 'id')
-                        ->all())
-                    ->default(fn (): ?int => PriceList::query()->where('is_default', true)->value('id')),
+                ...(MultiplePriceListsFeature::enabled() ? [
+                    Select::make('price_list_id')
+                        ->label(__('pim.field.price_list'))
+                        ->native(false)
+                        ->selectablePlaceholder(false)
+                        ->options(fn (): array => PriceList::query()->active()
+                            ->orderByDesc('is_default')
+                            ->orderBy('name')
+                            ->pluck('name', 'id')
+                            ->all())
+                        ->default(fn (): ?int => PriceList::query()->where('is_default', true)->value('id')),
+                ] : []),
                 Select::make('presence')
                     ->label(__('pim.filter.price_presence'))
                     ->native(false)

@@ -14,6 +14,7 @@ use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Modules\Pricing\Models\PriceList;
+use Modules\Pricing\Support\MultiplePriceListsFeature;
 
 class PriceListsTable
 {
@@ -32,7 +33,9 @@ class PriceListsTable
                     ->boolean(),
                 ToggleColumn::make('active')
                     ->label(__('pim.field.active'))
-                    ->disabled(fn (PriceList $record): bool => $record->is_default),
+                    // Activating anything beyond the default is a Pro feature.
+                    ->disabled(fn (PriceList $record): bool => $record->is_default
+                        || ! MultiplePriceListsFeature::enabled()),
                 TextColumn::make('prices_count')
                     ->label(__('pim.field.prices'))
                     ->sortable(),

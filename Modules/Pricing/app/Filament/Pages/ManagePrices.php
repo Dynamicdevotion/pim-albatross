@@ -9,6 +9,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Concerns\HasFilters;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Enums\FiltersLayout;
@@ -17,6 +18,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Modules\Localization\Support\Locales;
+use Modules\Localization\Support\MultilanguageFeature;
 use Modules\Pricing\Models\PriceList;
 use Modules\Pricing\Models\ProductPrice;
 use Modules\Pricing\Support\PriceAdjuster;
@@ -116,7 +118,7 @@ class ManagePrices extends Page implements HasTable
                 ProductsTable::searchFilter(),
                 ProductsTable::typeFilter(),
                 ProductsTable::statusFilter(),
-                ProductsTable::missingTranslationFilter(),
+                ...(MultilanguageFeature::enabled() ? [ProductsTable::missingTranslationFilter()] : []),
                 ProductsTable::taxonomyFilter(),
                 $this->pricePresenceFilter(),
                 ProductsTable::stockFilter(),
@@ -203,7 +205,7 @@ class ManagePrices extends Page implements HasTable
     }
 
     /**
-     * Overrides {@see \Filament\Tables\Concerns\HasFilters::applyTableFilters()}
+     * Overrides {@see HasFilters::applyTableFilters()}
      * only to also refresh the grid: the grid container is `wire:ignore`d (so
      * jspreadsheet keeps ownership of its DOM), so it never picks up a filter
      * change from Livewire's normal re-render — it needs the same manual

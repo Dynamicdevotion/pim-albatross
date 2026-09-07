@@ -87,7 +87,14 @@ final class DocTree
 
         usort($pages, fn (DocPage $a, DocPage $b): int => [$a->order, $a->title] <=> [$b->order, $b->title]);
 
-        return new DocSection(slug: $slug, title: $title, order: $order, indexPage: $indexPage, pages: $pages);
+        return new DocSection(
+            slug: $slug,
+            title: $title,
+            order: $order,
+            indexPage: $indexPage,
+            pages: $pages,
+            inactive: ! self::isFeatureEnabled($slug),
+        );
     }
 
     /**
@@ -118,9 +125,26 @@ final class DocTree
         return preg_match('/^(\d+)-/', $name, $matches) === 1 ? (int) $matches[1] : PHP_INT_MAX;
     }
 
+    /**
+     * Sections not applicable to this installation at all (module not
+     * installed) — omitted from the tree entirely. Distinct from a
+     * commercial feature that's merely turned off, see isFeatureEnabled().
+     */
     private static function isVisible(string $slug): bool
     {
         $check = config("wiki.section_visibility.{$slug}");
+
+        return $check === null || $check();
+    }
+
+    /**
+     * Sections documenting a commercial feature that's installed but
+     * currently switched off — still shown, marked inactive rather than
+     * removed from the tree.
+     */
+    private static function isFeatureEnabled(string $slug): bool
+    {
+        $check = config("wiki.section_feature_flags.{$slug}");
 
         return $check === null || $check();
     }

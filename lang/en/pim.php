@@ -651,5 +651,22 @@ return [
         'help_icon' => [
             'tooltip' => 'Open the guide',
         ],
+        'badge' => [
+            'inactive' => 'Inactive',
+        ],
+    ],
+
+    'localization' => [
+        'pro_notice' => [
+            'heading' => 'Pro feature',
+            'description' => 'Multi-language is available on the Pro plan only: you can manage the base language alone until you upgrade.',
+        ],
+    ],
+
+    'pricing' => [
+        'pro_notice' => [
+            'heading' => 'Pro feature',
+            'description' => 'Multiple price lists are available on the Pro plan only: you can manage the default list alone until you upgrade.',
+        ],
     ],
 ];

@@ -651,5 +651,22 @@ return [
         'help_icon' => [
             'tooltip' => 'Apri la guida',
         ],
+        'badge' => [
+            'inactive' => 'Non attivo',
+        ],
+    ],
+
+    'localization' => [
+        'pro_notice' => [
+            'heading' => 'Funzionalità Pro',
+            'description' => 'Il multilingua è disponibile solo con il piano Pro: puoi gestire soltanto la lingua base finché non lo attivi.',
+        ],
+    ],
+
+    'pricing' => [
+        'pro_notice' => [
+            'heading' => 'Funzionalità Pro',
+            'description' => 'I listini multipli sono disponibili solo con il piano Pro: puoi gestire soltanto il listino di default finché non lo attivi.',
+        ],
     ],
 ];

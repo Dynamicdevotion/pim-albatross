@@ -13,17 +13,27 @@ use Modules\Localization\Models\Language;
 class Locales
 {
     /**
-     * Active languages, base first.
+     * Active languages, base first — collapsed to the base language alone
+     * when {@see MultilanguageFeature} is off, regardless of how many other
+     * languages are marked `active` in the database. This is the single seam
+     * every translation tab, filter, export and sync integration already
+     * reads through, so every one of them automatically respects the flag
+     * without needing its own check. Because only this read path is gated
+     * (never the `active` column itself), no data is touched: turning the
+     * flag back on makes every previously-active language reappear exactly
+     * as it was.
      *
      * @return Collection<int, Language>
      */
     public static function active(): Collection
     {
-        return Language::query()
-            ->active()
-            ->orderByDesc('is_base')
-            ->orderBy('name')
-            ->get();
+        $query = Language::query()->active()->orderByDesc('is_base')->orderBy('name');
+
+        if (! MultilanguageFeature::enabled()) {
+            $query->where('is_base', true);
+        }
+
+        return $query->get();
     }
 
     /**

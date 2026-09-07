@@ -15,6 +15,7 @@ use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Table;
 use Modules\Localization\Models\Language;
 use Modules\Localization\Support\LanguageContent;
+use Modules\Localization\Support\MultilanguageFeature;
 
 class LanguagesTable
 {
@@ -38,9 +39,11 @@ class LanguagesTable
                     ->label(__('pim.field.active'))
                     // The base language is always on; a language that already
                     // has translated content must be switched off through the
-                    // "Deactivate…" action so the keep/delete choice is made.
+                    // "Deactivate…" action so the keep/delete choice is made;
+                    // activating anything beyond the base is a Pro feature.
                     ->disabled(fn (Language $record): bool => $record->is_base
-                        || ($record->active && LanguageContent::has($record)))
+                        || ($record->active && LanguageContent::has($record))
+                        || ! MultilanguageFeature::enabled())
                     ->afterStateUpdated(fn (Language $record, bool $state) => Notification::make()
                         ->title(__(
                             $state ? 'pim.notification.language_activated' : 'pim.notification.language_deactivated',

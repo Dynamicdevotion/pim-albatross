@@ -248,6 +248,9 @@
                         >
                             <x-filament::icon icon="heroicon-o-folder-open" class="wiki-guida-icon" />
                             <span>{!! $this->highlight($section->title) !!}</span>
+                            @if ($section->inactive)
+                                <x-wiki::inactive-badge />
+                            @endif
                         </button>
 
                         @if ($section->pages !== [])

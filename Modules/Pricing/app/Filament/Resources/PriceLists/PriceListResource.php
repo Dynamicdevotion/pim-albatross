@@ -13,6 +13,7 @@ use Modules\Pricing\Filament\Resources\PriceLists\Pages\ListPriceLists;
 use Modules\Pricing\Filament\Resources\PriceLists\Schemas\PriceListForm;
 use Modules\Pricing\Filament\Resources\PriceLists\Tables\PriceListsTable;
 use Modules\Pricing\Models\PriceList;
+use Modules\Pricing\Support\MultiplePriceListsFeature;
 
 class PriceListResource extends Resource
 {
@@ -39,6 +40,15 @@ class PriceListResource extends Resource
     public static function getNavigationGroup(): string|\UnitEnum|null
     {
         return __('pim.nav.pricing');
+    }
+
+    /**
+     * Creating a list beyond the default is a Pro feature — the "New" button
+     * is hidden entirely rather than shown-then-blocked.
+     */
+    public static function canCreate(): bool
+    {
+        return MultiplePriceListsFeature::enabled();
     }
 
     public static function form(Schema $schema): Schema
